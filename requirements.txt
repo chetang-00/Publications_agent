@@ -1,0 +1,4 @@
+pip-chill==1.0.3
+portkey-ai==1.14.0
+python-dotenv==1.1.1
+streamlit==1.46.1
