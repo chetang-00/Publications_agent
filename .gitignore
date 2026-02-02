@@ -1,0 +1,25 @@
+# secrets
+.env
+
+# data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# python
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# node
+node_modules/
+dist/
+
+# os/editor
+.DS_Store
+.vscode/
+.idea/
