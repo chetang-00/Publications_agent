@@ -37,7 +37,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = ["live: calls the real Portkey gateway (run with RUN_LIVE=1)"]
 addopts = "-m 'not live' --strict-markers"
-filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]
+filterwarnings = [
+    "error::pytest.PytestUnraisableExceptionWarning",
+    "ignore:Payload indexes have no effect in the local Qdrant:UserWarning",
+]
 
 [tool.coverage.run]
 source = ["app"]
@@ -53,7 +56,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]  # line length is the formatter's job
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
