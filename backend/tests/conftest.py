@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from app.config import Settings
 from app.db.session import Database, run_migrations
 from app.rag.vectorstore import VectorStore
 from app.seed.publications import index_publications, load_publications, read_csv
+from app.tools import build_registry
+from app.tools.base import ToolContext, ToolOutcome
 from tests.fakes import FakeEmbedder
 
 SETTINGS_ENV_VARS = (
@@ -80,3 +83,24 @@ async def seeded(db: Database, store: VectorStore, embedder: FakeEmbedder) -> Da
     await load_publications(db, result.rows)
     await index_publications(db, store, embedder, batch_size=8)
     return db
+
+
+@pytest.fixture
+def tool_ctx(seeded: Database, store: VectorStore, embedder: FakeEmbedder, settings: Settings) -> ToolContext:
+    return ToolContext(
+        db=seeded, store=store, embedder=embedder, settings=settings, conversation_id=None, run_id="run-test"
+    )
+
+
+@pytest.fixture
+def run_tool(tool_ctx: ToolContext):
+    """Call a registered tool exactly as the agent loop does: raw JSON → validate → execute."""
+    registry = build_registry()
+
+    async def call(tool_name: str, /, **arguments) -> ToolOutcome:
+        tool = registry.get(tool_name)
+        assert tool is not None, f"tool {tool_name} not registered"
+        args = registry.parse_args(tool, json.dumps(arguments))
+        return await registry.execute(tool, args, tool_ctx)
+
+    return call
