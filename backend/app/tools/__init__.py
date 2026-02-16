@@ -4,6 +4,6 @@ from app.tools.base import ToolRegistry
 
 
 def build_registry() -> ToolRegistry:
-    from app.tools import publications
+    from app.tools import publications, sql
 
-    return ToolRegistry([*publications.TOOLS])
+    return ToolRegistry([*publications.TOOLS, *sql.TOOLS])
