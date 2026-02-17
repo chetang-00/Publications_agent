@@ -254,3 +254,11 @@ def test_fixture_has_real_csv_columns():
     with SAMPLE_CSV.open(newline="", encoding="utf-8") as f:
         header = next(csv.reader(f))
     assert {"eid", "authors", "author_full_names", "cluster_label", "cited_by"} <= set(header)
+
+
+def test_cli_reindex_targets():
+    from app.cli import build_parser, reindex_targets
+
+    assert reindex_targets(build_parser().parse_args(["reindex"])) == (True, True)
+    assert reindex_targets(build_parser().parse_args(["reindex", "--documents"])) == (False, True)
+    assert reindex_targets(build_parser().parse_args(["reindex", "--publications"])) == (True, False)
