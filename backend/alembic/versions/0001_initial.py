@@ -204,7 +204,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["run_id"], ["agent_runs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("run_id", "call_id"),
+        sa.UniqueConstraint("run_id", "step", "call_id"),
     )
     with op.batch_alter_table("tool_calls", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_tool_calls_run_id"), ["run_id"], unique=False)

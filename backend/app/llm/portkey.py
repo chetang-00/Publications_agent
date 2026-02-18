@@ -58,7 +58,11 @@ class OpenAIChatLLM:
         self.client = client or create_chat_client(settings)
 
     async def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None, trace_id: str
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        trace_id: str,
+        tool_choice: str | None = None,
     ) -> AsyncIterator[TextDelta | LLMResult]:
         kwargs: dict[str, Any] = {
             "model": self.model,
@@ -69,6 +73,8 @@ class OpenAIChatLLM:
         }
         if tools:
             kwargs["tools"] = tools
+            if tool_choice:
+                kwargs["tool_choice"] = tool_choice
         if self.settings.llm_stream_usage:
             kwargs["stream_options"] = {"include_usage": True}
 

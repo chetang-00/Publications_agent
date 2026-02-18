@@ -217,3 +217,14 @@ async def test_connection_error_maps_to_unavailable(settings):
     )
     with pytest.raises(LLMUnavailableError):
         await collect(OpenAIChatLLM(settings, client=client))
+
+
+async def test_tool_choice_is_forwarded(settings):
+    rec = Recorder(body=sse_body([chunk({"content": "ok"}, "stop")]))
+    llm = make_llm(settings, rec)
+    tools = [{"type": "function", "function": {"name": "t", "description": "d", "parameters": {}}}]
+    _ = [
+        item
+        async for item in llm.stream([{"role": "user", "content": "hi"}], tools, "run-1", tool_choice="none")
+    ]
+    assert rec.last_json["tool_choice"] == "none"

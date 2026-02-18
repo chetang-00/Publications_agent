@@ -50,7 +50,14 @@ class ChatLLM(Protocol):
     model: str
 
     def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None, trace_id: str
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        trace_id: str,
+        tool_choice: str | None = None,
     ) -> AsyncIterator[TextDelta | LLMResult]:
-        """Yield TextDelta items as text arrives, then exactly one LLMResult."""
+        """Yield TextDelta items as text arrives, then exactly one LLMResult.
+
+        `tool_choice="none"` keeps the tool definitions in the request but forbids calling them.
+        """
         ...

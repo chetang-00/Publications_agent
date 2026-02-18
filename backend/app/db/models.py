@@ -180,7 +180,7 @@ class Message(Base):
 
 class ToolCallRecord(Base):
     __tablename__ = "tool_calls"
-    __table_args__ = (UniqueConstraint("run_id", "call_id"),)
+    __table_args__ = (UniqueConstraint("run_id", "step", "call_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True)
