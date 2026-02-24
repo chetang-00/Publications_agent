@@ -37,7 +37,7 @@ export const initialRun: RunView = {
   error: null,
 };
 
-export type RunAction = AgentEvent | { type: "resume" } | { type: "reset" };
+export type RunAction = AgentEvent | { type: "resume"; runId?: string } | { type: "reset" };
 
 /** Live state of one agent run, driven by the SSE events of that run. */
 export function runReducer(state: RunView, action: RunAction): RunView {
@@ -45,7 +45,7 @@ export function runReducer(state: RunView, action: RunAction): RunView {
     case "reset":
       return initialRun;
     case "resume":
-      return { ...state, status: "streaming", approval: null, error: null };
+      return { ...state, runId: action.runId ?? state.runId, status: "streaming", approval: null, error: null };
     case "run_started":
       return { ...initialRun, runId: action.run_id, status: "streaming" };
     case "token":

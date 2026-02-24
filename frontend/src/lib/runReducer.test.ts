@@ -93,3 +93,10 @@ describe("runReducer", () => {
     expect(state.error).toEqual({ code: "llm_unavailable", message: "Try later" });
   });
 });
+
+describe("resume after a page reload", () => {
+  it("adopts the run id when resuming a run the page never streamed", () => {
+    const state = runReducer(initialRun, { type: "resume", runId: "r9" });
+    expect(state).toMatchObject({ runId: "r9", status: "streaming", approval: null });
+  });
+});
