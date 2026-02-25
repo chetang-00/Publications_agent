@@ -1,17 +1,20 @@
 """Application settings, read from environment variables and an optional `.env` file."""
 
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_PORTKEY_BASE_URL = "https://ai-gateway.apps.cloud.rt.nyu.edu/v1"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # The repo-root .env is used when running from backend/ during development; backend/.env, if
+    # present, overrides it. In Docker, settings come from the container environment.
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), env_file_encoding="utf-8", extra="ignore")
 
     # Portkey gateway (OpenAI-compatible). Authenticated with x-portkey-api-key, never a bearer token.
     portkey_base_url: str = DEFAULT_PORTKEY_BASE_URL
@@ -91,6 +94,21 @@ class Settings(BaseSettings):
         return self.max_upload_mb * 1024 * 1024
 
 
+def load_settings_or_exit() -> Settings:
+    """Settings, or a readable configuration error (exit code 2) instead of a traceback."""
+    try:
+        return Settings()
+    except ValidationError as exc:
+        problems = "\n".join(
+            f"  - {'.'.join(str(p) for p in err['loc']).upper()}: {err['msg']}" for err in exc.errors()
+        )
+        print(
+            f"Configuration error:\n{problems}\nSet these in .env (copy .env.example) or the environment.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from None
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return load_settings_or_exit()

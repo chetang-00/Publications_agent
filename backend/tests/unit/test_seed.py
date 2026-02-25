@@ -262,3 +262,9 @@ def test_cli_reindex_targets():
     assert reindex_targets(build_parser().parse_args(["reindex"])) == (True, True)
     assert reindex_targets(build_parser().parse_args(["reindex", "--documents"])) == (False, True)
     assert reindex_targets(build_parser().parse_args(["reindex", "--publications"])) == (True, False)
+
+
+def test_cli_missing_configuration_is_a_clean_error(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert cli_main(["migrate"]) == 2
+    assert "PORTKEY_API_KEY" in capsys.readouterr().err

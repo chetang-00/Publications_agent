@@ -72,3 +72,26 @@ def test_secrets_are_not_printed():
 
 def test_max_upload_bytes():
     assert make(portkey_api_key="k", max_upload_mb=2).max_upload_bytes == 2 * 1024 * 1024
+
+
+def test_load_settings_or_exit_explains_missing_configuration(monkeypatch, tmp_path, capsys):
+    from app.config import load_settings_or_exit
+
+    monkeypatch.chdir(tmp_path)  # no .env files here
+    with pytest.raises(SystemExit) as exc:
+        load_settings_or_exit()
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "PORTKEY_API_KEY" in err
+    assert ".env" in err
+
+
+def test_settings_read_repo_root_env_file(monkeypatch, tmp_path):
+    (tmp_path / ".env").write_text("PORTKEY_API_KEY=from-root\nCHAT_MODEL=root-model\n")
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    (backend / ".env").write_text("CHAT_MODEL=backend-model\n")
+    monkeypatch.chdir(backend)
+    s = Settings()
+    assert s.portkey_api_key.get_secret_value() == "from-root"
+    assert s.chat_model == "backend-model"  # backend/.env overrides the root file

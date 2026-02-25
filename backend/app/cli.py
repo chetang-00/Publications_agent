@@ -5,7 +5,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from app.config import Settings
+from app.config import Settings, load_settings_or_exit
 from app.db.session import Database, run_migrations
 from app.llm.embeddings import PortkeyEmbedder
 from app.llm.types import LLMError
@@ -92,7 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    settings = Settings()
+    try:
+        settings = load_settings_or_exit()
+    except SystemExit as exc:
+        return int(exc.code or 2)
     run_migrations(settings.database_url)
     try:
         if args.command == "migrate":
