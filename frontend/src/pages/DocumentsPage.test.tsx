@@ -72,3 +72,12 @@ describe("DocumentsPage", () => {
     expect(pollInterval(undefined)).toBe(false);
   });
 });
+
+describe("DocumentsPage empty state", () => {
+  it("shows a message and no empty list when there are no documents", async () => {
+    mockApi({ "GET /documents": () => json([]) });
+    renderWithProviders(<DocumentsPage />);
+    expect(await screen.findByText("No documents yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+  });
+});

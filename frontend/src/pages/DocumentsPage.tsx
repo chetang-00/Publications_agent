@@ -127,8 +127,9 @@ export function DocumentsPage() {
         {documents.isError && <p className="text-sm text-rose-600">Could not load documents.</p>}
         {documents.data?.length === 0 && <p className="text-sm text-zinc-500">No documents yet.</p>}
 
+        {documents.data && documents.data.length > 0 && (
         <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
-          {documents.data?.map((doc) => {
+          {documents.data.map((doc) => {
             const status = STATUS[doc.status];
             return (
               <li key={doc.id} className="flex items-start gap-3 px-4 py-3">
@@ -177,6 +178,7 @@ export function DocumentsPage() {
             );
           })}
         </ul>
+        )}
       </div>
     </div>
   );

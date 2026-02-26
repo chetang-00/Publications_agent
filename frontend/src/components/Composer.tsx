@@ -15,11 +15,13 @@ export function Composer({
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  // Grow with the text. While empty, leave the height to rows={1}: measuring the placeholder
+  // before the layout settles can yield a very tall box.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+    el.style.height = "";
+    if (text) el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }, [text]);
 
   function submit() {
