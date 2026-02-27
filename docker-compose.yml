@@ -1,0 +1,75 @@
+name: publications-agent
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    restart: unless-stopped
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # The image has bash but no curl: speak HTTP over /dev/tcp to the readiness endpoint.
+      test:
+        - CMD-SHELL
+        - >-
+          bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333 &&
+          printf "GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 &&
+          head -n1 <&3 | grep -q " 200 "'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging: *logging
+
+  api:
+    build: ./backend
+    image: publications-agent-api:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      DATABASE_URL: sqlite+aiosqlite:////data/app.db
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - app-data:/data
+      - ./data/seed:/seed:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    <<: *hardening
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    logging: *logging
+
+  web:
+    build: ./frontend
+    image: publications-agent-web:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"  # this machine only
+    read_only: true
+    tmpfs:
+      - /tmp
+    <<: *hardening
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  app-data:
+  qdrant-data:
