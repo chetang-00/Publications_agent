@@ -4,7 +4,7 @@ NODE     := scripts/node-docker.sh
 SEED_CSV ?= data/seed/papers_with_cluster_labels.csv
 
 .DEFAULT_GOAL := help
-.PHONY: help up down restart logs ps seed reindex test test-backend test-frontend lint smoke dev-qdrant dev-api dev-web clean
+.PHONY: help up down restart logs ps seed reindex test test-backend test-frontend test-live lint smoke dev-qdrant dev-api dev-web clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -43,6 +43,9 @@ test-backend: ## Backend tests with coverage
 
 test-frontend: ## Frontend tests (inside the Node 22 container)
 	$(NODE) sh -c "npm ci --no-audit --no-fund && npx vitest run"
+
+test-live: ## Check the real Portkey gateway: streaming, tool calls, embeddings (needs PORTKEY_API_KEY)
+	cd backend && RUN_LIVE=1 uv run pytest -m live -v
 
 lint: ## Ruff + TypeScript checks
 	cd backend && uv run ruff check app tests && uv run ruff format --check app tests
