@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.agent.loop import AgentRunner, NothingPending, RunInProgress
+from app.agent.loop import AgentRunner, NothingPending
 from app.db import repo
 from app.db.models import (
     AgentRun,
@@ -483,10 +483,49 @@ async def test_resume_requires_a_matching_pending_call(runner, llm, conversation
         await runner.resume("no-such-run", "w1", approved=True, note=None, emit=Events())
 
 
-async def test_start_refuses_while_a_run_is_in_progress(runner, conversation, seeded):
-    await repo.create_run(seeded, conversation, model="m")
-    with pytest.raises(RunInProgress):
-        await runner.start(conversation, "hello", Events())
+async def test_stale_running_run_is_failed_and_does_not_block(runner, llm, conversation, seeded):
+    # Only one live run per conversation can exist (RunManager), so a 'running' row seen here is a
+    # leftover from a crash; it must not lock the conversation forever.
+    stale = await repo.create_run(seeded, conversation, model="m")
+    llm.add(FakeTurn(text="Hello again."))
+    events = Events()
+    await runner.start(conversation, "hello", events)
+    assert events.types()[-1] == "message_completed"
+    run = await get_run(seeded, stale.id)
+    assert (run.status, run.error_code) == ("failed", "interrupted")
+
+
+async def test_failure_before_the_loop_fails_the_run(runner, conversation, seeded, monkeypatch):
+    async def broken(*args, **kwargs):
+        raise RuntimeError("database hiccup")
+
+    monkeypatch.setattr(repo, "title_from_first_message", broken)
+    events = Events()
+    run_id = await runner.start(conversation, "hi", events)
+    assert events.of("error")[0].code == "internal_error"
+    assert (await get_run(seeded, run_id)).status == "failed"
+
+
+async def test_failure_while_resuming_fails_the_run_and_unblocks(runner, llm, conversation, seeded, monkeypatch):
+    run_id, _ = await request_label_change(runner, llm, conversation)
+    original = repo.update_tool_call
+    calls = {"n": 0}
+
+    async def flaky(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database hiccup")
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(repo, "update_tool_call", flaky)
+    events = Events()
+    await runner.resume(run_id, "w1", approved=True, note=None, emit=events)
+    assert events.of("error")[0].code == "internal_error"
+    assert (await get_run(seeded, run_id)).status == "failed"
+    llm.add(FakeTurn(text="Still here."))
+    after = Events()
+    await runner.start(conversation, "are you there?", after)
+    assert after.types()[-1] == "message_completed"
 
 
 # ── 15. LLM failures ──

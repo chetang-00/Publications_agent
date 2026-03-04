@@ -60,6 +60,8 @@ MAX_INVALID_TOOL_CALLS = 3
 MAX_RAW_ARGUMENT_CHARS = 20_000
 FALLBACK_ANSWER = "I couldn't produce an answer this time. Please rephrase the question or try again."
 SUPERSEDED_NOTE = "Superseded: the user sent a new message before approving or rejecting this change."
+INTERRUPTED_NOTE = "This answer was interrupted by an error and could not finish."
+GENERIC_FAILURE = "Something went wrong while answering. Please try again."
 
 
 class RunInProgress(Exception):
@@ -122,20 +124,28 @@ class AgentRunner:
         active = await repo.active_run(self.db, conversation_id)
         if active is not None:
             if active.status == "running":
-                raise RunInProgress("This conversation is still answering the previous message.")
-            await self._cancel_pending(active)
+                # RunManager allows one live run per conversation, so a 'running' row seen here was
+                # left behind by a failure and can never finish. Close it instead of blocking.
+                await repo.update_run(
+                    self.db, active.id, status="failed", error_code="interrupted", error=INTERRUPTED_NOTE
+                )
+            else:
+                await self._cancel_pending(active)
 
         run = await repo.create_run(self.db, conversation_id, self.llm.model)
-        user_message = await repo.add_message(
-            self.db, conversation_id=conversation_id, run_id=run.id, role="user", content=content
-        )
-        await repo.title_from_first_message(self.db, conversation_id, content)
-        await emit(
-            RunStarted(run_id=run.id, conversation_id=conversation_id, user_message_id=user_message.id)
-        )
-
         state = _RunState(run_id=run.id, conversation_id=conversation_id)
-        await self._loop(state, await self._tracker(state), emit)
+        try:
+            user_message = await repo.add_message(
+                self.db, conversation_id=conversation_id, run_id=run.id, role="user", content=content
+            )
+            await repo.title_from_first_message(self.db, conversation_id, content)
+            await emit(RunStarted(run_id=run.id, conversation_id=conversation_id, user_message_id=user_message.id))
+            tracker = await self._tracker(state)
+        except Exception:
+            log.exception("Agent run failed to start", extra={"run_id": run.id})
+            await self._fail(state, "internal_error", GENERIC_FAILURE, emit)
+            return run.id
+        await self._loop(state, tracker, emit)
         return run.id
 
     async def resume(
@@ -157,41 +167,46 @@ class AgentRunner:
             completion_tokens=run.completion_tokens,
             invalid_tool_calls=run.invalid_tool_calls,
         )
-        tracker = await self._tracker(state)
         token = run_id_var.set(run.id)
         try:
-            tool = self.registry.get(pending.name)
-            if approved and tool is not None:
-                args = tool.args_model.model_validate(pending.arguments or {})
-                outcome = await self.registry.execute(tool, args, self._ctx(state))
-                status, content, preview = outcome.status, outcome.content(), outcome.preview()
-                result, error, duration = outcome.result, outcome.error, outcome.duration_ms
-            else:
-                reason = (note or "").strip() or "The user rejected this change."
-                status, content, preview = (
-                    "rejected",
-                    json.dumps({"status": "rejected", "note": reason}),
-                    f"Rejected: {reason}",
-                )
-                result, error, duration = None, reason, None
-            log.info("Approval decided", extra={"tool": pending.name, "approved": approved, "status": status})
+            tracker = await self._tracker(state)
+            await self._apply_decision(state, pending, approved, note, tracker, emit)
+        except Exception:
+            log.exception("Applying the approval decision failed")
+            await self._fail(state, "internal_error", GENERIC_FAILURE, emit)
+            return
         finally:
             run_id_var.reset(token)
+        await self._loop(state, tracker, emit)
+
+    async def _apply_decision(
+        self,
+        state: _RunState,
+        pending: Any,
+        approved: bool,
+        note: str | None,
+        tracker: citation_checks.CitationTracker,
+        emit: Emit,
+    ) -> None:
+        tool = self.registry.get(pending.name)
+        if approved and tool is not None:
+            args = tool.args_model.model_validate(pending.arguments or {})
+            outcome = await self.registry.execute(tool, args, self._ctx(state))
+            status, content, preview = outcome.status, outcome.content(), outcome.preview()
+            result, error, duration = outcome.result, outcome.error, outcome.duration_ms
+        else:
+            reason = (note or "").strip() or "The user rejected this change."
+            status, content, preview = "rejected", json.dumps({"status": "rejected", "note": reason}), f"Rejected: {reason}"
+            result, error, duration = None, reason, None
+        log.info("Approval decided", extra={"tool": pending.name, "approved": approved, "status": status})
 
         await repo.update_tool_call(
-            self.db,
-            run_id,
-            pending.step,
-            pending.call_id,
-            status=status,
-            result=result,
-            error=error,
-            duration_ms=duration,
+            self.db, state.run_id, pending.step, pending.call_id, status=status, result=result, error=error, duration_ms=duration
         )
         await repo.add_message(
             self.db,
             conversation_id=state.conversation_id,
-            run_id=run_id,
+            run_id=state.run_id,
             role="tool",
             tool_call_id=pending.call_id,
             content=content,
@@ -208,7 +223,6 @@ class AgentRunner:
                 step=pending.step,
             )
         )
-        await self._loop(state, tracker, emit)
 
     # ── the loop ─────────────────────────────────────────────────────────────
 
