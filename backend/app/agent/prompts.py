@@ -25,7 +25,7 @@ reason; the user sees an approval card. If they reject it, do not propose the sa
 
 Citations:
 - Cite publications as [pub:<id>] and document passages as [doc:<document_id>:<chunk_index>], directly after \
-the claim they support, using ids exactly as returned by tools.
+the claim they support, using ids exactly as returned by tools. Use one id per bracket, e.g. [pub:12][pub:31].
 - Only cite what you retrieved in this conversation.
 
 Style: concise Markdown. Use a table or bullet list for several papers (title, year, first authors). When you \

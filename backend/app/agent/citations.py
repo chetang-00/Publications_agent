@@ -11,7 +11,10 @@ from typing import Any
 
 from app.agent.events import Citation
 
-_MARKER = re.compile(r"\[\s*(?:pub:\s*(?P<pub>\d+)|doc:\s*(?P<doc>[0-9a-fA-F-]{36}):\s*(?P<chunk>\d+))\s*\]")
+# A bracket that contains at least one marker: "[pub:6]", "[pub:6, pub:9]", "[pub: 6; 9]", "[doc:<uuid>:2]".
+_GROUP = re.compile(r"\[(?P<body>[^\[\]]*?\b(?:pub|doc)\s*:[^\[\]]*)\]", re.IGNORECASE)
+_PUB = re.compile(r"^(?:pub\s*:\s*)?(?P<id>\d+)$", re.IGNORECASE)
+_DOC = re.compile(r"^doc\s*:\s*(?P<doc>[0-9a-fA-F-]{36})\s*:\s*(?P<chunk>\d+)$", re.IGNORECASE)
 
 
 class CitationTracker:
@@ -67,21 +70,17 @@ class CitationTracker:
         citations: dict[str, Citation] = {}
         unverified: list[str] = []
 
-        def replace(match: re.Match[str]) -> str:
-            if match.group("pub"):
-                pub_id = int(match.group("pub"))
-                marker = f"pub:{pub_id}"
-                if pub_id not in self.publications:
-                    unverified.append(marker)
-                    return ""
-                citations.setdefault(
-                    marker,
-                    Citation(
-                        kind="publication", id=str(pub_id), marker=marker, title=self.publications[pub_id]
-                    ),
-                )
-                return f"[{marker}]"
-            doc_id, chunk = match.group("doc").lower(), int(match.group("chunk"))
+        def verify_pub(pub_id: int) -> str:
+            marker = f"pub:{pub_id}"
+            if pub_id not in self.publications:
+                unverified.append(marker)
+                return ""
+            citations.setdefault(
+                marker, Citation(kind="publication", id=str(pub_id), marker=marker, title=self.publications[pub_id])
+            )
+            return f"[{marker}]"
+
+        def verify_doc(doc_id: str, chunk: int) -> str:
             marker = f"doc:{doc_id}:{chunk}"
             if (doc_id, chunk) not in self.chunks:
                 unverified.append(marker)
@@ -89,13 +88,22 @@ class CitationTracker:
             filename, page = self.chunks[(doc_id, chunk)]
             citations.setdefault(
                 marker,
-                Citation(
-                    kind="document", id=doc_id, marker=marker, filename=filename, page=page, chunk_index=chunk
-                ),
+                Citation(kind="document", id=doc_id, marker=marker, filename=filename, page=page, chunk_index=chunk),
             )
             return f"[{marker}]"
 
-        cleaned = _MARKER.sub(replace, content)
+        def replace(match: re.Match[str]) -> str:
+            # Each id in a bracket is checked on its own; verified ones become single markers.
+            out: list[str] = []
+            for part in re.split(r"[,;]", match.group("body")):
+                part = part.strip()
+                if doc := _DOC.match(part):
+                    out.append(verify_doc(doc.group("doc").lower(), int(doc.group("chunk"))))
+                elif pub := _PUB.match(part):
+                    out.append(verify_pub(int(pub.group("id"))))
+            return "".join(out)
+
+        cleaned = _GROUP.sub(replace, content)
         if unverified:
             cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)  # "paper ." -> "paper."
             cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)

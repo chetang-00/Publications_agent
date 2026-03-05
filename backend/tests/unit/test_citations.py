@@ -79,3 +79,32 @@ def test_tool_errors_and_unknown_shapes_are_ignored():
     t.record_tool_result("run_readonly_sql", {"columns": ["n"], "rows": [[5]]})
     t.record_tool_result("something_else", {"items": "not a list"})
     assert t.finalize("[pub:5]")[1] == []
+
+
+def test_grouped_markers_are_verified_one_by_one():
+    content, citations, unverified = tracker_with_results().finalize("Claim [pub:6, pub:999].")
+    assert content == "Claim [pub:6]."
+    assert [c.id for c in citations] == ["6"]
+    assert unverified == ["pub:999"]
+
+
+def test_grouped_markers_are_split_into_single_markers():
+    t = tracker_with_results()
+    assert t.finalize("A [pub:6; pub:13].")[0] == "A [pub:6][pub:13]."
+    assert t.finalize("B [pub: 6, 13].")[0] == "B [pub:6][pub:13]."
+    assert t.finalize(f"C [doc:{DOC}:2, pub:7].")[0] == f"C [doc:{DOC}:2][pub:7]."
+
+
+def test_group_of_only_unverified_markers_is_removed():
+    content, citations, unverified = tracker_with_results().finalize("Made up [pub:900, pub:901].")
+    assert content == "Made up."
+    assert citations == []
+    assert unverified == ["pub:900", "pub:901"]
+
+
+def test_prompt_asks_for_one_id_per_bracket():
+    from datetime import date
+
+    from app.agent.prompts import build_system_prompt
+
+    assert "[pub:12][pub:31]" in build_system_prompt([], date(2026, 10, 3))
