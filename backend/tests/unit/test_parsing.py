@@ -64,11 +64,20 @@ def test_pdf_without_text_layer_fails_with_reason(tmp_path):
     assert "No extractable text" in str(exc.value)
 
 
-def test_encrypted_pdf_fails_with_reason(tmp_path):
-    path = make_encrypted_pdf(tmp_path / "locked.pdf", "Confidential results")
+@pytest.mark.parametrize("algorithm", ["RC4-128", "AES-128", "AES-256"])
+def test_encrypted_pdf_fails_with_reason(tmp_path, algorithm):
+    path = make_encrypted_pdf(tmp_path / "locked.pdf", "Confidential results", algorithm=algorithm)
     with pytest.raises(ParseError) as exc:
         parse_document(path, "pdf")
     assert "password" in str(exc.value)
+
+
+@pytest.mark.parametrize("algorithm", ["RC4-128", "AES-128", "AES-256"])
+def test_pdf_with_only_owner_restrictions_is_read(tmp_path, algorithm):
+    # Publisher PDFs often restrict copying/printing but open without a password.
+    path = make_encrypted_pdf(tmp_path / "restricted.pdf", "Results improved survival.", password="", algorithm=algorithm)
+    doc = parse_document(path, "pdf")
+    assert "survival" in doc.pages[0].text
 
 
 def test_corrupt_pdf_fails_with_reason(tmp_path):

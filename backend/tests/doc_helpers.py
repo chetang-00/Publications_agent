@@ -21,12 +21,15 @@ def make_pdf(path: Path, pages: list[str]) -> Path:
     return path
 
 
-def make_encrypted_pdf(path: Path, text: str, password: str = "secret") -> Path:
+def make_encrypted_pdf(
+    path: Path, text: str, password: str = "secret", algorithm: str = "RC4-128", owner_password: str | None = None
+) -> Path:
+    """Encrypted PDF. With password="" it opens without a password (owner restrictions only)."""
     plain = make_pdf(path.with_suffix(".plain.pdf"), [text])
     writer = PdfWriter()
     for page in PdfReader(plain).pages:
         writer.add_page(page)
-    writer.encrypt(user_password=password, algorithm="RC4-128")
+    writer.encrypt(user_password=password, owner_password=owner_password or "owner-secret", algorithm=algorithm)
     with path.open("wb") as handle:
         writer.write(handle)
     return path
