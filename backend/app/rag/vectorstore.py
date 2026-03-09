@@ -1,5 +1,6 @@
 """Qdrant access for the two vector collections: publications and uploaded-document chunks."""
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -79,6 +80,8 @@ class VectorHit:
 class VectorStore:
     def __init__(self, client: AsyncQdrantClient) -> None:
         self.client = client
+        # Documents are processed concurrently; collection creation must happen exactly once.
+        self._create_lock = asyncio.Lock()
 
     @classmethod
     def from_url(cls, url: str) -> "VectorStore":
@@ -106,13 +109,23 @@ class VectorStore:
     async def ensure_collection(self, name: str, dim: int) -> None:
         existing = await self.collection_dim(name)
         if existing is None:
-            await self.client.create_collection(
-                name, vectors_config=qm.VectorParams(size=dim, distance=qm.Distance.COSINE)
-            )
-            for field_name, schema in _PAYLOAD_INDEXES[name].items():
-                await self.client.create_payload_index(name, field_name, field_schema=schema)
-        elif existing != dim:
-            raise EmbeddingDimensionMismatch(_mismatch_message(name, existing, dim))
+            async with self._create_lock:
+                existing = await self.collection_dim(name)  # another task may have created it meanwhile
+                if existing is None:
+                    try:
+                        await self.client.create_collection(
+                            name, vectors_config=qm.VectorParams(size=dim, distance=qm.Distance.COSINE)
+                        )
+                    except Exception:
+                        # Created concurrently by another process (HTTP 409); anything else re-raises below.
+                        if await self.collection_dim(name) is None:
+                            raise
+                    else:
+                        for field_name, schema in _PAYLOAD_INDEXES[name].items():
+                            await self.client.create_payload_index(name, field_name, field_schema=schema)
+                    existing = await self.collection_dim(name)
+        if existing != dim:
+            raise EmbeddingDimensionMismatch(_mismatch_message(name, existing or 0, dim))
 
     async def reset_collection(self, name: str) -> None:
         if await self.client.collection_exists(name):

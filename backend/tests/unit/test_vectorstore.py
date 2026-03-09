@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from qdrant_client import AsyncQdrantClient
 
@@ -186,3 +188,21 @@ async def test_reset_collection(seeded):
 
 async def test_ping(store):
     assert await store.ping() is True
+
+
+async def test_concurrent_first_upserts_create_the_collection_once(store, monkeypatch):
+    # With a real server each call awaits the network, so two first uploads interleave between
+    # "does the collection exist?" and "create it". Simulate that latency.
+    original = store.client.collection_exists
+
+    async def slow_exists(name):
+        result = await original(name)
+        await asyncio.sleep(0.02)
+        return result
+
+    monkeypatch.setattr(store.client, "collection_exists", slow_exists)
+    await asyncio.gather(
+        store.upsert_chunks([chunk("00000000-0000-0000-0000-00000000000a", "doc-a", 0, "alpha text")]),
+        store.upsert_chunks([chunk("00000000-0000-0000-0000-00000000000b", "doc-b", 0, "beta text")]),
+    )
+    assert await store.count(DOCUMENT_CHUNKS) == 2
