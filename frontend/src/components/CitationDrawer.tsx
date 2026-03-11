@@ -123,17 +123,35 @@ function PublicationDrawer({ id, onClose }: { id: string; onClose: () => void })
 }
 
 function DocumentDrawer({ citation, onClose }: { citation: Citation; onClose: () => void }) {
+  const chunkIndex = citation.chunk_index ?? 0;
+  const passage = useQuery({
+    queryKey: ["document-chunk", citation.id, chunkIndex],
+    queryFn: () => api.getDocumentChunk(citation.id, chunkIndex),
+  });
   return (
     <Shell label={citation.filename ?? "Document"} onClose={onClose}>
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <FileText className="size-5 text-brand-600" aria-hidden />
-          <h2 className="text-lg font-semibold">{citation.filename ?? "Uploaded document"}</h2>
-        </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {citation.page ? `Page ${citation.page}, ` : ""}passage {(citation.chunk_index ?? 0) + 1}
-        </p>
-        <Link to="/documents" className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">
+      <div className="space-y-4">
+        <header>
+          <div className="flex items-center gap-2">
+            <FileText className="size-5 text-brand-600" aria-hidden />
+            <h2 className="text-lg font-semibold">{citation.filename ?? "Uploaded document"}</h2>
+          </div>
+          <p className="mt-1 text-sm text-zinc-500">
+            {citation.page ? `Page ${citation.page} · ` : ""}passage {chunkIndex + 1}
+          </p>
+        </header>
+        {passage.isPending && <Loader2 className="size-5 animate-spin text-zinc-400" aria-label="Loading" />}
+        {passage.isError && (
+          <p role="alert" className="text-sm text-rose-600">
+            This passage is no longer available. The document may have been deleted.
+          </p>
+        )}
+        {passage.data && (
+          <blockquote className="rounded-lg border-l-4 border-brand-300 bg-zinc-50 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap dark:bg-zinc-950">
+            {passage.data.text}
+          </blockquote>
+        )}
+        <Link to="/documents" className="inline-block text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">
           Manage documents
         </Link>
       </div>

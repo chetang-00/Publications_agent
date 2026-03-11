@@ -99,3 +99,18 @@ async def test_attach_documents_to_conversation(client, container, tmp_path):
     assert [d["id"] for d in detail["documents"]] == [doc["id"]]
     cleared = await client.post(f"/api/conversations/{conv_id}/documents", json={"document_ids": []})
     assert cleared.json() == {"document_ids": []}
+
+
+async def test_read_a_cited_passage(client, container, tmp_path):
+    doc = (await client.post("/api/documents", files=pdf_upload(tmp_path))).json()
+    await container.tasks.wait_all()
+    chunk = (await client.get(f"/api/documents/{doc['id']}/chunks/1")).json()
+    assert chunk == {
+        "document_id": doc["id"],
+        "filename": "trial.pdf",
+        "chunk_index": 1,
+        "page": 2,
+        "text": "Results. Survival improved.",
+    }
+    assert (await client.get(f"/api/documents/{doc['id']}/chunks/99")).status_code == 404
+    assert (await client.get("/api/documents/missing/chunks/0")).status_code == 404

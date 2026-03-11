@@ -93,6 +93,14 @@ class DocumentOut(ApiModel):
     created_at: datetime
 
 
+class DocumentChunkOut(BaseModel):
+    document_id: str
+    filename: str
+    chunk_index: int
+    page: int | None
+    text: str
+
+
 class ConversationDetailOut(BaseModel):
     conversation: ConversationOut
     messages: list[MessageOut]

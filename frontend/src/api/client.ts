@@ -4,6 +4,7 @@ import type {
   ApprovalDecision,
   Conversation,
   ConversationDetail,
+  DocumentChunk,
   DocumentInfo,
   Publication,
   ToolInfo,
@@ -69,6 +70,8 @@ export const api = {
     return request<DocumentInfo>("/documents", { method: "POST", body: form });
   },
   deleteDocument: (id: string) => request<void>(`/documents/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  getDocumentChunk: (id: string, chunkIndex: number) =>
+    request<DocumentChunk>(`/documents/${encodeURIComponent(id)}/chunks/${chunkIndex}`),
   getPublication: (id: string | number) => request<Publication>(`/publications/${encodeURIComponent(String(id))}`),
   listTools: () => request<ToolInfo[]>("/tools"),
 };

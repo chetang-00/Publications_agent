@@ -6,8 +6,8 @@ from sqlalchemy import select
 
 from app.api.deps import ContainerDep
 from app.api.errors import ApiError, not_found
-from app.api.schemas import DocumentOut
-from app.db.models import Document
+from app.api.schemas import DocumentChunkOut, DocumentOut
+from app.db.models import Document, DocumentChunk
 from app.rag.ingest import FileTooLarge
 from app.rag.parsing import UnsupportedFile
 
@@ -52,6 +52,25 @@ async def get_document(document_id: str, c: ContainerDep) -> DocumentOut:
     if doc is None:
         raise not_found("Document")
     return DocumentOut.model_validate(doc)
+
+
+@router.get("/{document_id}/chunks/{chunk_index}", response_model=DocumentChunkOut)
+async def get_document_chunk(document_id: str, chunk_index: int, c: ContainerDep) -> DocumentChunkOut:
+    """The passage a document citation points to."""
+    async with c.db.sessionmaker() as s:
+        row = (
+            await s.execute(
+                select(DocumentChunk, Document.filename)
+                .join(Document, Document.id == DocumentChunk.document_id)
+                .where(DocumentChunk.document_id == document_id, DocumentChunk.chunk_index == chunk_index)
+            )
+        ).first()
+    if row is None:
+        raise not_found("Passage")
+    chunk, filename = row
+    return DocumentChunkOut(
+        document_id=document_id, filename=filename, chunk_index=chunk.chunk_index, page=chunk.page, text=chunk.text
+    )
 
 
 @router.delete("/{document_id}", status_code=204)

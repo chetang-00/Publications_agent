@@ -144,6 +144,14 @@ export interface DocumentInfo {
   created_at: string;
 }
 
+export interface DocumentChunk {
+  document_id: string;
+  filename: string;
+  chunk_index: number;
+  page: number | null;
+  text: string;
+}
+
 export interface ConversationDetail {
   conversation: Conversation;
   messages: ChatMessage[];
