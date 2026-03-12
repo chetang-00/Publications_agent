@@ -27,3 +27,10 @@ describe("format helpers", () => {
     expect(relativeTime("2026-10-01T12:00:00Z", now)).toBe("2 d ago");
   });
 });
+
+describe("server timestamps without a timezone", () => {
+  it("are treated as UTC", () => {
+    const now = Date.parse("2026-10-03T12:00:00Z");
+    expect(relativeTime("2026-10-03T09:00:00", now)).toBe("3 h ago");
+  });
+});

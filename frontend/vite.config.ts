@@ -15,5 +15,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: false,
     restoreMocks: true,
+    // A non-UTC zone so timezone bugs show up in tests regardless of the machine's clock.
+    env: { TZ: "America/New_York" },
   },
 });

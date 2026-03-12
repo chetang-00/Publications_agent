@@ -115,3 +115,10 @@ async def test_cors_headers_when_configured(container):
             headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "GET"},
         )
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+async def test_timestamps_read_back_from_the_database_are_utc(client):
+    created = (await client.post("/api/conversations", json={})).json()
+    listed = (await client.get("/api/conversations")).json()[0]
+    for value in (created["created_at"], listed["created_at"], listed["updated_at"]):
+        assert value.endswith("Z") or value.endswith("+00:00"), value

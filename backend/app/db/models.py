@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 
 
 def utcnow() -> datetime:
@@ -16,9 +17,26 @@ def new_id() -> str:
     return str(uuid4())
 
 
+class UTCDateTime(TypeDecorator[datetime]):
+    """Stores UTC; always returns timezone-aware UTC datetimes (SQLite drops the offset on read)."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(UTC)
+        return value
+
+    def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value
+
+
 class Base(DeclarativeBase):
     type_annotation_map = {  # noqa: RUF012 (SQLAlchemy reads this class attribute)
-        datetime: DateTime(timezone=True),
+        datetime: UTCDateTime(),
         dict[str, Any]: JSON,
         list[Any]: JSON,
     }
