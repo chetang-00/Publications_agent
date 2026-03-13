@@ -97,7 +97,7 @@ def _parse_int(value: str | None, field_name: str) -> int | None:
         return None
     try:
         return int(float(value))
-    except ValueError:
+    except (ValueError, OverflowError):  # "abc", "nan", "inf", "1e400"
         raise ValueError(f"{field_name} is not a number: {value!r}") from None
 
 

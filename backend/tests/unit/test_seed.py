@@ -268,3 +268,18 @@ def test_cli_missing_configuration_is_a_clean_error(tmp_path, monkeypatch, capsy
     monkeypatch.chdir(tmp_path)
     assert cli_main(["migrate"]) == 2
     assert "PORTKEY_API_KEY" in capsys.readouterr().err
+
+
+def test_seed_skips_overflowing_numbers_and_keeps_multiline_abstracts(tmp_path):
+    header = "eid,title,year,authors,author_full_names,cited_by,abstract\n"
+    rows = (
+        'e1,Good paper,2020,Smith J.,"Smith, John (1)",3,"First line.\nSecond line, with a comma."\n'
+        "e2,Infinite year,inf,Smith J.,\"Smith, John (1)\",1,x\n"
+        "e3,Huge citations,2021,Smith J.,\"Smith, John (1)\",1e400,x\n"
+    )
+    path = tmp_path / "odd.csv"
+    path.write_text(header + rows)
+    result = read_csv(path)
+    assert [r.eid for r in result.rows] == ["e1"]
+    assert result.rows[0].abstract == "First line.\nSecond line, with a comma."
+    assert len(result.skipped) == 2
