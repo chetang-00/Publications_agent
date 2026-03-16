@@ -228,3 +228,33 @@ async def test_tool_choice_is_forwarded(settings):
         async for item in llm.stream([{"role": "user", "content": "hi"}], tools, "run-1", tool_choice="none")
     ]
     assert rec.last_json["tool_choice"] == "none"
+
+
+async def test_calls_that_reuse_an_index_stay_separate(settings):
+    # Some non-OpenAI routes send each complete call with index 0 and repeat the name.
+    rec = Recorder(
+        body=sse_body(
+            [
+                chunk({"tool_calls": [{"index": 0, "id": "call_1", "type": "function", "function": {"name": "get_publication", "arguments": '{"publication_id": 1}'}}]}),
+                chunk({"tool_calls": [{"index": 0, "id": "call_2", "type": "function", "function": {"name": "get_publication", "arguments": '{"publication_id": 2}'}}]}, "tool_calls"),
+            ]
+        )
+    )
+    result = (await collect(make_llm(settings, rec)))[-1]
+    assert [(c.id, c.name, c.arguments) for c in result.tool_calls] == [
+        ("call_1", "get_publication", '{"publication_id": 1}'),
+        ("call_2", "get_publication", '{"publication_id": 2}'),
+    ]
+
+
+async def test_a_repeated_name_fragment_is_not_duplicated(settings):
+    rec = Recorder(
+        body=sse_body(
+            [
+                chunk({"tool_calls": [{"index": 0, "id": "c", "function": {"name": "resolve_author", "arguments": '{"name": '}}]}),
+                chunk({"tool_calls": [{"index": 0, "function": {"name": "resolve_author", "arguments": '"Lee"}'}}]}, "tool_calls"),
+            ]
+        )
+    )
+    result = (await collect(make_llm(settings, rec)))[-1]
+    assert [(c.name, c.arguments) for c in result.tool_calls] == [("resolve_author", '{"name": "Lee"}')]

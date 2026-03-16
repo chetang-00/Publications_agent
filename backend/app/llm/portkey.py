@@ -79,7 +79,8 @@ class OpenAIChatLLM:
             kwargs["stream_options"] = {"include_usage": True}
 
         content: list[str] = []
-        calls: dict[int, dict[str, Any]] = {}
+        calls: list[dict[str, Any]] = []
+        by_index: dict[int, dict[str, Any]] = {}
         prompt_tokens = completion_tokens = 0
         finish_reason: str | None = None
 
@@ -95,12 +96,18 @@ class OpenAIChatLLM:
                         content.append(delta.content)
                         yield TextDelta(delta.content)
                     for fragment in (delta.tool_calls if delta else None) or []:
-                        acc = calls.setdefault(fragment.index, {"id": "", "name": "", "arguments": []})
+                        acc = by_index.get(fragment.index)
+                        # Some non-OpenAI routes send every call with index 0; a new id is a new call.
+                        if acc is None or (fragment.id and acc["id"] and fragment.id != acc["id"]):
+                            acc = {"id": "", "name": "", "arguments": []}
+                            calls.append(acc)
+                            by_index[fragment.index] = acc
                         if fragment.id:
                             acc["id"] = fragment.id
                         if fragment.function:
-                            if fragment.function.name:
-                                acc["name"] += fragment.function.name
+                            name = fragment.function.name
+                            if name and name != acc["name"]:  # names may stream in pieces or repeat whole
+                                acc["name"] += name
                             if fragment.function.arguments:
                                 acc["arguments"].append(fragment.function.arguments)
                     if choice.finish_reason:
@@ -124,7 +131,7 @@ class OpenAIChatLLM:
                 name=acc["name"],
                 arguments="".join(acc["arguments"]),
             )
-            for _, acc in sorted(calls.items())
+            for acc in calls
         ]
         yield LLMResult(
             content="".join(content),
