@@ -208,3 +208,21 @@ async def test_preview_is_short(ctx):
     tool = make_tool()
     outcome = await ToolRegistry([tool]).execute(tool, EchoArgs(text="y" * 50, times=5), ctx)
     assert len(outcome.preview()) <= 500
+
+
+def test_null_for_an_argument_with_a_default_means_use_the_default():
+    args = ToolRegistry().parse_args(make_tool(), '{"text": "hi", "times": null, "title_contains": null}')
+    assert args == EchoArgs(text="hi", times=1, title_contains=None)
+
+
+def test_null_for_a_required_argument_is_still_invalid():
+    with pytest.raises(InvalidToolArguments):
+        ToolRegistry().parse_args(make_tool(), '{"text": null}')
+
+
+def test_null_list_arguments_use_their_default():
+    from app.tools import build_registry
+
+    registry = build_registry()
+    args = registry.parse_args(registry.get("search_publications"), '{"query": "protein", "authors": null, "top_k": null}')
+    assert (args.authors, args.top_k) == ([], 8)

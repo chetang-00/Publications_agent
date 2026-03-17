@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from app.config import Settings
 from app.db.session import Database
@@ -31,6 +31,21 @@ class ToolArgs(BaseModel):
     """Base for tool argument models: unknown fields are an error, not silently dropped."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _null_means_default(cls, data: Any) -> Any:
+        # Models often send null for optional arguments; treat it as "not given" when the field has
+        # a non-null default, instead of spending one of the run's invalid-call allowances.
+        if not isinstance(data, dict):
+            return data
+        drop = set()
+        for name, value in data.items():
+            field = cls.model_fields.get(name)
+            if value is None and field is not None and not field.is_required():
+                if field.default_factory is not None or field.default is not None:
+                    drop.add(name)
+        return {k: v for k, v in data.items() if k not in drop}
 
 
 class ToolError(Exception):
