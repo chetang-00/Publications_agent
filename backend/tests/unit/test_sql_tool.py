@@ -107,3 +107,9 @@ async def test_syntax_error_is_reported(run_tool):
 async def test_long_text_values_are_shortened(run_tool):
     result = await rows(run_tool, "SELECT printf('%.3000c', 'x') AS long_text")
     assert len(result["rows"][0][0]) <= 1001
+
+
+async def test_huge_values_are_refused_instead_of_exhausting_memory(run_tool):
+    out = await run_tool("run_readonly_sql", sql="SELECT length(randomblob(5000000)) AS n")
+    assert out.status == "error"
+    assert "too big" in out.error

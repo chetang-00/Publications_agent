@@ -5,7 +5,7 @@ Defence in depth, each layer sufficient on its own for writes:
 2. an authorizer allows only SELECT, reads of the three publication tables, recursion and
    harmless functions — every other action (writes, ATTACH, PRAGMA, other tables) is denied;
 3. the statement is wrapped as a sub-select, so a second statement is a syntax error;
-4. a progress handler aborts queries that run past the time limit; rows are capped.
+4. a progress handler aborts queries that run past the time limit; rows and value sizes are capped.
 """
 
 import asyncio
@@ -22,6 +22,7 @@ ALLOWED_TABLES = frozenset({"publications", "publication_authors", "publication_
 DENIED_FUNCTIONS = frozenset({"load_extension", "readfile", "writefile", "edit", "fts3_tokenizer"})
 TIME_LIMIT_SECONDS = 3.0
 MAX_VALUE_CHARS = 1000
+MAX_VALUE_BYTES = 1_000_000  # largest string/blob SQLite may build, e.g. via randomblob() or group_concat()
 
 SCHEMA_HELP = """\
 Tables (SQLite):
@@ -88,6 +89,7 @@ def _run(path: Path, sql: str, limit: int, time_limit: float) -> RunReadonlySqlR
             for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
         ) | {"sqlite_master", "sqlite_schema", "sqlite_temp_master"}
         conn.set_authorizer(_authorizer(real_tables))
+        conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_VALUE_BYTES)
         deadline = time.monotonic() + time_limit
         conn.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 1000)
         try:
