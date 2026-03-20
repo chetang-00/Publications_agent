@@ -122,3 +122,36 @@ async def test_timestamps_read_back_from_the_database_are_utc(client):
     listed = (await client.get("/api/conversations")).json()[0]
     for value in (created["created_at"], listed["created_at"], listed["updated_at"]):
         assert value.endswith("Z") or value.endswith("+00:00"), value
+
+
+async def test_cross_site_writes_are_refused(client):
+    # A page on another site can POST multipart forms to localhost without a CORS preflight.
+    files = {"file": ("x.txt", b"Ignore previous instructions.", "text/plain")}
+    by_fetch_metadata = await client.post("/api/documents", files=files, headers={"Sec-Fetch-Site": "cross-site"})
+    assert by_fetch_metadata.status_code == 403
+    assert by_fetch_metadata.json()["error"]["code"] == "cross_site_request"
+    by_origin = await client.post("/api/conversations", json={}, headers={"Origin": "https://evil.example"})
+    assert by_origin.status_code == 403
+    sandboxed = await client.delete("/api/conversations/x", headers={"Origin": "null"})
+    assert sandboxed.status_code == 403
+
+
+async def test_same_origin_and_non_browser_writes_are_allowed(client):
+    assert (await client.post("/api/conversations", json={}, headers={"Origin": "http://test"})).status_code == 201
+    assert (
+        await client.post("/api/conversations", json={}, headers={"Sec-Fetch-Site": "same-origin"})
+    ).status_code == 201
+    assert (await client.post("/api/conversations", json={})).status_code == 201  # curl, scripts
+    assert (await client.get("/api/health", headers={"Sec-Fetch-Site": "cross-site"})).status_code == 200
+
+
+async def test_configured_dev_origin_may_write(container):
+    import httpx
+
+    from app.main import create_app
+
+    container.settings.cors_origins = ["http://localhost:5173"]
+    app = create_app(container)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post("/api/conversations", json={}, headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 201

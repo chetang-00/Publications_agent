@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import catalog, conversations, documents, health, runs
-from app.api.errors import RequestContextMiddleware, install_error_handlers
+from app.api.errors import CrossSiteWriteGuard, RequestContextMiddleware, install_error_handlers
 from app.config import get_settings
 from app.container import Container, build_container
 from app.db import repo
@@ -67,6 +67,7 @@ def create_app(container: Container | None = None) -> FastAPI:
             allow_headers=["Content-Type", "X-Request-ID"],
             expose_headers=["X-Request-ID"],
         )
+    app.add_middleware(CrossSiteWriteGuard, allowed_origins=origins)
     app.add_middleware(RequestContextMiddleware)
     install_error_handlers(app)
     for router in (health.router, conversations.router, runs.router, documents.router, catalog.router):

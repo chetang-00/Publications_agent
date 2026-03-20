@@ -3,6 +3,7 @@
 import logging
 import time
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -99,3 +100,40 @@ class RequestContextMiddleware:
                     },
                 )
             request_id_var.reset(token)
+
+
+class CrossSiteWriteGuard:
+    """Refuse state-changing requests that a browser sends on behalf of another site.
+
+    The API has no login, and multipart uploads are "simple" CORS requests that skip the preflight,
+    so without this any web page could add documents (a prompt-injection channel) to the local app.
+    Non-browser clients (curl, scripts) send neither header and are unaffected.
+    """
+
+    UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+    def __init__(self, app: ASGIApp, allowed_origins: list[str] | None = None) -> None:
+        self.app = app
+        self.allowed = {o.rstrip("/").lower() for o in allowed_origins or []}
+
+    def _refused(self, scope: Scope) -> bool:
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or []}
+        if headers.get("sec-fetch-site", "").lower() == "cross-site":
+            return True
+        origin = headers.get("origin")
+        if origin is None:
+            return False
+        origin = origin.strip().rstrip("/").lower()
+        if origin == "null":
+            return True
+        same_host = urlsplit(origin).netloc == headers.get("host", "").lower()
+        return not (same_host or origin in self.allowed)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("method") in self.UNSAFE_METHODS and self._refused(scope):
+            response = JSONResponse(
+                error_body("cross_site_request", "Requests from other websites are not allowed."), status_code=403
+            )
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
