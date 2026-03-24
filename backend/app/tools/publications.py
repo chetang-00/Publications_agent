@@ -19,7 +19,7 @@ from app.rag.vectorstore import (
 )
 from app.text import normalize
 from app.tools.base import Tool, ToolArgs, ToolContext, ToolError
-from app.tools.filters import UNKNOWN_LABEL, PublicationFilters, apply_filters
+from app.tools.filters import UNKNOWN_LABEL, UNKNOWN_LABEL_NAMES, PublicationFilters, apply_filters
 
 log = logging.getLogger(__name__)
 
@@ -432,7 +432,7 @@ async def cluster_label_approval_context(args: UpdateClusterLabelArgs, ctx: Tool
         "title": pub.title,
         "current_label": pub.cluster_label,
         "proposed_label": args.new_label,
-        "label_exists": args.new_label in labels,
+        "label_exists": args.new_label in labels or normalize(args.new_label) in UNKNOWN_LABEL_NAMES,
         "closest_existing_labels": difflib.get_close_matches(args.new_label, labels, n=3, cutoff=0.6),
         "reason": args.reason,
     }
@@ -444,7 +444,9 @@ async def update_cluster_label(args: UpdateClusterLabelArgs, ctx: ToolContext) -
         if pub is None:
             raise ToolError(f"No publication with id {args.publication_id}.")
         old_label = pub.cluster_label
-        if old_label == args.new_label:
+        # "Unknown Label" means no label, stored as NULL exactly like the seeded data.
+        stored = None if normalize(args.new_label) in UNKNOWN_LABEL_NAMES else args.new_label
+        if old_label == stored:
             return UpdateClusterLabelResult(
                 publication_id=pub.id,
                 title=pub.title,
@@ -452,7 +454,7 @@ async def update_cluster_label(args: UpdateClusterLabelArgs, ctx: ToolContext) -
                 new_label=args.new_label,
                 status="unchanged",
             )
-        pub.cluster_label = args.new_label
+        pub.cluster_label = stored
         session.add(
             ClusterLabelChange(
                 publication_id=pub.id,
@@ -466,7 +468,7 @@ async def update_cluster_label(args: UpdateClusterLabelArgs, ctx: ToolContext) -
         # Keep the vector payload in step; if that fails, the SQLite change is rolled back.
         vectors_indexed = await ctx.store.collection_dim(PUBLICATIONS) is not None
         if vectors_indexed:
-            await ctx.store.set_publication_label(pub.id, args.new_label)
+            await ctx.store.set_publication_label(pub.id, stored)
         try:
             await session.commit()
         except Exception:

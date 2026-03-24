@@ -11,6 +11,7 @@ from app.text import normalize
 from app.tools.base import ToolArgs
 
 UNKNOWN_LABEL = "Unknown Label"
+UNKNOWN_LABEL_NAMES = frozenset({"unknown label", "unknown", "unlabelled", "unlabeled", "none"})
 
 
 class PublicationFilters(ToolArgs):
@@ -89,7 +90,7 @@ def apply_filters(stmt: Select, filters: PublicationFilters) -> Select:
         conditions.append(Publication.year <= filters.year_to)
     if filters.cluster_label:
         label = filters.cluster_label.strip()
-        if normalize(label) in ("unknown label", "unknown", "unlabelled", "unlabeled", "none"):
+        if normalize(label) in UNKNOWN_LABEL_NAMES:
             conditions.append(Publication.cluster_label.is_(None))
         else:
             conditions.append(func.lower(Publication.cluster_label) == label.lower())
