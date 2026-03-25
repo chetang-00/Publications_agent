@@ -68,9 +68,10 @@ class OpenAIChatLLM:
             "model": self.model,
             "messages": messages,
             "stream": True,
-            "temperature": self.settings.llm_temperature,
             "extra_headers": {"Authorization": Omit(), PORTKEY_TRACE_ID_HEADER: trace_id},
         }
+        if self.settings.llm_temperature is not None:
+            kwargs["temperature"] = self.settings.llm_temperature
         if tools:
             kwargs["tools"] = tools
             if tool_choice:

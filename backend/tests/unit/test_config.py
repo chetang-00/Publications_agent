@@ -95,3 +95,9 @@ def test_settings_read_repo_root_env_file(monkeypatch, tmp_path):
     s = Settings()
     assert s.portkey_api_key.get_secret_value() == "from-root"
     assert s.chat_model == "backend-model"  # backend/.env overrides the root file
+
+
+def test_blank_temperature_means_do_not_send_one(monkeypatch):
+    monkeypatch.setenv("PORTKEY_API_KEY", "k")
+    monkeypatch.setenv("LLM_TEMPERATURE", "")
+    assert Settings(_env_file=None).llm_temperature is None

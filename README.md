@@ -166,6 +166,7 @@ Vite 8, Vitest 5 and jsdom need **Node ≥ 22.22**. The `make` targets run the f
 | API exits with `Configuration error: PORTKEY_API_KEY` | Set the key in `.env`, then `make up`. |
 | Answers fail with "rejected the credentials" | Wrong key, or the gateway expects `PORTKEY_VIRTUAL_KEY`. |
 | `llm_bad_request` mentioning `stream_options` | Set `LLM_STREAM_USAGE=false`. |
+| `llm_bad_request` mentioning `temperature` (reasoning models) | Leave `LLM_TEMPERATURE=` blank. |
 | The model never calls tools | Use a model that supports function calling (`make test-live` checks this). |
 | A PDF ends "No extractable text" | It is scanned or image-only; there is no OCR. Export it with a text layer. |
 | `/api/ready` says publications are not indexed | Run `make seed`. It is resumable. |

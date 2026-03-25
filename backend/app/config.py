@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_batch_size: int = Field(256, ge=1, le=2048)
     llm_stream_usage: bool = True
-    llm_temperature: float = Field(0.2, ge=0, le=2)
+    # Blank = don't send a temperature (reasoning models reject the parameter).
+    llm_temperature: float | None = Field(0.2, ge=0, le=2)
 
     qdrant_url: str = "http://qdrant:6333"
     database_url: str = "sqlite+aiosqlite:////data/app.db"
@@ -49,7 +50,11 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
-        "portkey_virtual_key", "embedding_portkey_api_key", "embedding_portkey_virtual_key", mode="before"
+        "portkey_virtual_key",
+        "embedding_portkey_api_key",
+        "embedding_portkey_virtual_key",
+        "llm_temperature",
+        mode="before",
     )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:

@@ -258,3 +258,10 @@ async def test_a_repeated_name_fragment_is_not_duplicated(settings):
     )
     result = (await collect(make_llm(settings, rec)))[-1]
     assert [(c.name, c.arguments) for c in result.tool_calls] == [("resolve_author", '{"name": "Lee"}')]
+
+
+async def test_temperature_is_omitted_when_unset(settings):
+    settings.llm_temperature = None  # reasoning models reject a temperature parameter
+    rec = Recorder(body=sse_body([chunk({"content": "ok"}, "stop")]))
+    await collect(make_llm(settings, rec))
+    assert "temperature" not in rec.last_json
