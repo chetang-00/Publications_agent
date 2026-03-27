@@ -143,3 +143,31 @@ describe("ChatPage", () => {
     expect(screen.getByRole("button", { name: /used 1 tool/i })).toBeInTheDocument();
   });
 });
+
+describe("ChatPage retry", () => {
+  it("offers Retry on a failed answer and resends the question", async () => {
+    const failed: ConversationDetail = {
+      ...emptyDetail,
+      runs: [
+        {
+          id: "r1", status: "failed", steps: 1, model: "m", prompt_tokens: 0, completion_tokens: 0,
+          error_code: "llm_unavailable", error: "The language model is temporarily unavailable.",
+          started_at: "2026-10-03T10:00:00Z", finished_at: null, pending_approval: null,
+        },
+      ],
+      messages: [{ id: 1, run_id: "r1", role: "user", content: "How many papers in 2021?", citations: [], created_at: "" }],
+    };
+    const { calls } = mockApi({
+      "GET /conversations/c1": () => json(failed),
+      "GET /documents": () => json([]),
+      "POST /conversations/c1/messages": () =>
+        sse([{ type: "run_started", run_id: "r2", conversation_id: "c1", user_message_id: 2 }]),
+    });
+    renderChat();
+    expect(await screen.findByRole("alert")).toHaveTextContent("temporarily unavailable");
+    await userEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "POST")?.body).toEqual({ content: "How many papers in 2021?" }),
+    );
+  });
+});

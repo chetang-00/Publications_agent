@@ -99,8 +99,9 @@ function ChatPage({ conversationId }: { conversationId: string }) {
               onDecide={decide}
               onCitation={setCitation}
               onRetry={
-                turn === lastTurn && turn.live && turn.error && !turn.runId && run.pendingText
-                  ? () => void run.send(run.pendingText as string)
+                // The latest question failed (refused, gateway down, …): ask it again as a new message.
+                turn === lastTurn && turn.error && !turn.cancelled && turn.userText && !run.busy
+                  ? () => void run.send(turn.userText as string)
                   : undefined
               }
             />
