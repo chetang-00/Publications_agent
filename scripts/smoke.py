@@ -31,9 +31,31 @@ from app.text import normalize  # noqa: E402
 COUNT_TOOLS = {"publication_stats", "filter_publications", "run_readonly_sql"}
 PASS_THRESHOLD = 10
 DOC_TEXT = (
-    "Study protocol notes.\n\nWe enrolled 120 adult patients across three clinical sites. "
-    "The primary outcome was 12-month survival; the secondary outcome was quality of life.\n"
+    "Study protocol notes. We enrolled 120 adult patients across three clinical sites. "
+    "The primary outcome was 12-month survival; the secondary outcome was quality of life."
 )
+
+
+def make_protocol_pdf(path: Path) -> Path:
+    """A PDF that is AES-encrypted with owner restrictions only, like many publisher copies."""
+    from pypdf import PdfReader, PdfWriter
+    from reportlab.pdfgen import canvas
+
+    plain = path.with_suffix(".plain.pdf")
+    pdf = canvas.Canvas(str(plain))
+    y = 800
+    for line in (DOC_TEXT[i : i + 90] for i in range(0, len(DOC_TEXT), 90)):
+        pdf.drawString(40, y, line)
+        y -= 14
+    pdf.showPage()
+    pdf.save()
+    writer = PdfWriter()
+    for page in PdfReader(plain).pages:
+        writer.add_page(page)
+    writer.encrypt(user_password="", owner_password="smoke-owner", algorithm="AES-128")
+    with path.open("wb") as handle:
+        writer.write(handle)
+    return path
 
 
 @dataclass
@@ -253,10 +275,11 @@ def main() -> int:
 
     truth = ground_truth(args.csv)
 
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", prefix="protocol-notes-", delete=False) as handle:
-        handle.write(DOC_TEXT)
-    with open(handle.name, "rb") as data:
-        doc = client.post("/api/documents", files={"file": ("protocol-notes.txt", data, "text/plain")}).json()
+    pdf_path = make_protocol_pdf(Path(tempfile.mkdtemp()) / "protocol-notes.pdf")
+    with pdf_path.open("rb") as data:
+        doc = client.post(
+            "/api/documents", files={"file": ("protocol-notes.pdf", data, "application/pdf")}
+        ).json()
     deadline = time.time() + 120
     while doc["status"] == "processing" and time.time() < deadline:
         time.sleep(1)
