@@ -132,7 +132,8 @@ class CrossSiteWriteGuard:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http" and scope.get("method") in self.UNSAFE_METHODS and self._refused(scope):
             response = JSONResponse(
-                error_body("cross_site_request", "Requests from other websites are not allowed."), status_code=403
+                error_body("cross_site_request", "Requests from other websites are not allowed."),
+                status_code=403,
             )
             await response(scope, receive, send)
             return

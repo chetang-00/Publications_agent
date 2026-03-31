@@ -69,7 +69,11 @@ async def get_document_chunk(document_id: str, chunk_index: int, c: ContainerDep
         raise not_found("Passage")
     chunk, filename = row
     return DocumentChunkOut(
-        document_id=document_id, filename=filename, chunk_index=chunk.chunk_index, page=chunk.page, text=chunk.text
+        document_id=document_id,
+        filename=filename,
+        chunk_index=chunk.chunk_index,
+        page=chunk.page,
+        text=chunk.text,
     )
 
 

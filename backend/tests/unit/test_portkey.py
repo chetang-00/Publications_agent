@@ -235,8 +235,31 @@ async def test_calls_that_reuse_an_index_stay_separate(settings):
     rec = Recorder(
         body=sse_body(
             [
-                chunk({"tool_calls": [{"index": 0, "id": "call_1", "type": "function", "function": {"name": "get_publication", "arguments": '{"publication_id": 1}'}}]}),
-                chunk({"tool_calls": [{"index": 0, "id": "call_2", "type": "function", "function": {"name": "get_publication", "arguments": '{"publication_id": 2}'}}]}, "tool_calls"),
+                chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {"name": "get_publication", "arguments": '{"publication_id": 1}'},
+                            }
+                        ]
+                    }
+                ),
+                chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "call_2",
+                                "type": "function",
+                                "function": {"name": "get_publication", "arguments": '{"publication_id": 2}'},
+                            }
+                        ]
+                    },
+                    "tool_calls",
+                ),
             ]
         )
     )
@@ -251,8 +274,25 @@ async def test_a_repeated_name_fragment_is_not_duplicated(settings):
     rec = Recorder(
         body=sse_body(
             [
-                chunk({"tool_calls": [{"index": 0, "id": "c", "function": {"name": "resolve_author", "arguments": '{"name": '}}]}),
-                chunk({"tool_calls": [{"index": 0, "function": {"name": "resolve_author", "arguments": '"Lee"}'}}]}, "tool_calls"),
+                chunk(
+                    {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "c",
+                                "function": {"name": "resolve_author", "arguments": '{"name": '},
+                            }
+                        ]
+                    }
+                ),
+                chunk(
+                    {
+                        "tool_calls": [
+                            {"index": 0, "function": {"name": "resolve_author", "arguments": '"Lee"}'}}
+                        ]
+                    },
+                    "tool_calls",
+                ),
             ]
         )
     )

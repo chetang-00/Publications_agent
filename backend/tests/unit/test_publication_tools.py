@@ -342,11 +342,15 @@ async def test_approval_context_suggests_existing_labels(tool_ctx):
 
 
 async def test_setting_unknown_label_clears_the_label(run_tool, tool_ctx):
-    out = await run_tool("update_cluster_label", publication_id=6, new_label="Unknown Label", reason="not sure it fits")
+    out = await run_tool(
+        "update_cluster_label", publication_id=6, new_label="Unknown Label", reason="not sure it fits"
+    )
     assert out.result["status"] == "updated"
     async with tool_ctx.db.sessionmaker() as s:
         assert (await s.get(Publication, 6)).cluster_label is None
     unlabelled = await run_tool("filter_publications", cluster_label="Unknown Label")
     assert 6 in ids(unlabelled)
-    again = await run_tool("update_cluster_label", publication_id=6, new_label="unknown label", reason="same again")
+    again = await run_tool(
+        "update_cluster_label", publication_id=6, new_label="unknown label", reason="same again"
+    )
     assert again.result["status"] == "unchanged"

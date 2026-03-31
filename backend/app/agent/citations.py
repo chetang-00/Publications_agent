@@ -76,7 +76,8 @@ class CitationTracker:
                 unverified.append(marker)
                 return ""
             citations.setdefault(
-                marker, Citation(kind="publication", id=str(pub_id), marker=marker, title=self.publications[pub_id])
+                marker,
+                Citation(kind="publication", id=str(pub_id), marker=marker, title=self.publications[pub_id]),
             )
             return f"[{marker}]"
 
@@ -88,7 +89,9 @@ class CitationTracker:
             filename, page = self.chunks[(doc_id, chunk)]
             citations.setdefault(
                 marker,
-                Citation(kind="document", id=doc_id, marker=marker, filename=filename, page=page, chunk_index=chunk),
+                Citation(
+                    kind="document", id=doc_id, marker=marker, filename=filename, page=page, chunk_index=chunk
+                ),
             )
             return f"[{marker}]"
 

@@ -224,5 +224,7 @@ def test_null_list_arguments_use_their_default():
     from app.tools import build_registry
 
     registry = build_registry()
-    args = registry.parse_args(registry.get("search_publications"), '{"query": "protein", "authors": null, "top_k": null}')
+    args = registry.parse_args(
+        registry.get("search_publications"), '{"query": "protein", "authors": null, "top_k": null}'
+    )
     assert (args.authors, args.top_k) == ([], 8)

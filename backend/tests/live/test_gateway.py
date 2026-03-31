@@ -44,7 +44,9 @@ def live_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
         return Settings()
     except Exception as exc:
         # RUN_LIVE=1 is an explicit request to test the gateway; missing settings must not pass quietly.
-        pytest.fail(f"RUN_LIVE=1 but the Portkey settings are incomplete (set PORTKEY_API_KEY in .env): {exc}")
+        pytest.fail(
+            f"RUN_LIVE=1 but the Portkey settings are incomplete (set PORTKEY_API_KEY in .env): {exc}"
+        )
 
 
 async def collect(llm: OpenAIChatLLM, messages, tools=None, tool_choice=None):

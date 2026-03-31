@@ -139,7 +139,9 @@ class AgentRunner:
                 self.db, conversation_id=conversation_id, run_id=run.id, role="user", content=content
             )
             await repo.title_from_first_message(self.db, conversation_id, content)
-            await emit(RunStarted(run_id=run.id, conversation_id=conversation_id, user_message_id=user_message.id))
+            await emit(
+                RunStarted(run_id=run.id, conversation_id=conversation_id, user_message_id=user_message.id)
+            )
             tracker = await self._tracker(state)
         except Exception:
             log.exception("Agent run failed to start", extra={"run_id": run.id})
@@ -196,12 +198,23 @@ class AgentRunner:
             result, error, duration = outcome.result, outcome.error, outcome.duration_ms
         else:
             reason = (note or "").strip() or "The user rejected this change."
-            status, content, preview = "rejected", json.dumps({"status": "rejected", "note": reason}), f"Rejected: {reason}"
+            status, content, preview = (
+                "rejected",
+                json.dumps({"status": "rejected", "note": reason}),
+                f"Rejected: {reason}",
+            )
             result, error, duration = None, reason, None
         log.info("Approval decided", extra={"tool": pending.name, "approved": approved, "status": status})
 
         await repo.update_tool_call(
-            self.db, state.run_id, pending.step, pending.call_id, status=status, result=result, error=error, duration_ms=duration
+            self.db,
+            state.run_id,
+            pending.step,
+            pending.call_id,
+            status=status,
+            result=result,
+            error=error,
+            duration_ms=duration,
         )
         await repo.add_message(
             self.db,

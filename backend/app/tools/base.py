@@ -39,13 +39,16 @@ class ToolArgs(BaseModel):
         # a non-null default, instead of spending one of the run's invalid-call allowances.
         if not isinstance(data, dict):
             return data
-        drop = set()
-        for name, value in data.items():
+
+        def has_default(name: str) -> bool:
             field = cls.model_fields.get(name)
-            if value is None and field is not None and not field.is_required():
-                if field.default_factory is not None or field.default is not None:
-                    drop.add(name)
-        return {k: v for k, v in data.items() if k not in drop}
+            return (
+                field is not None
+                and not field.is_required()
+                and (field.default_factory is not None or field.default is not None)
+            )
+
+        return {k: v for k, v in data.items() if not (v is None and has_default(k))}
 
 
 class ToolError(Exception):

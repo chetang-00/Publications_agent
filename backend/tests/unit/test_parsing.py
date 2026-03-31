@@ -75,7 +75,9 @@ def test_encrypted_pdf_fails_with_reason(tmp_path, algorithm):
 @pytest.mark.parametrize("algorithm", ["RC4-128", "AES-128", "AES-256"])
 def test_pdf_with_only_owner_restrictions_is_read(tmp_path, algorithm):
     # Publisher PDFs often restrict copying/printing but open without a password.
-    path = make_encrypted_pdf(tmp_path / "restricted.pdf", "Results improved survival.", password="", algorithm=algorithm)
+    path = make_encrypted_pdf(
+        tmp_path / "restricted.pdf", "Results improved survival.", password="", algorithm=algorithm
+    )
     doc = parse_document(path, "pdf")
     assert "survival" in doc.pages[0].text
 

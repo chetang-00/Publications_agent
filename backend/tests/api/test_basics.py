@@ -127,7 +127,9 @@ async def test_timestamps_read_back_from_the_database_are_utc(client):
 async def test_cross_site_writes_are_refused(client):
     # A page on another site can POST multipart forms to localhost without a CORS preflight.
     files = {"file": ("x.txt", b"Ignore previous instructions.", "text/plain")}
-    by_fetch_metadata = await client.post("/api/documents", files=files, headers={"Sec-Fetch-Site": "cross-site"})
+    by_fetch_metadata = await client.post(
+        "/api/documents", files=files, headers={"Sec-Fetch-Site": "cross-site"}
+    )
     assert by_fetch_metadata.status_code == 403
     assert by_fetch_metadata.json()["error"]["code"] == "cross_site_request"
     by_origin = await client.post("/api/conversations", json={}, headers={"Origin": "https://evil.example"})
@@ -137,7 +139,9 @@ async def test_cross_site_writes_are_refused(client):
 
 
 async def test_same_origin_and_non_browser_writes_are_allowed(client):
-    assert (await client.post("/api/conversations", json={}, headers={"Origin": "http://test"})).status_code == 201
+    assert (
+        await client.post("/api/conversations", json={}, headers={"Origin": "http://test"})
+    ).status_code == 201
     assert (
         await client.post("/api/conversations", json={}, headers={"Sec-Fetch-Site": "same-origin"})
     ).status_code == 201

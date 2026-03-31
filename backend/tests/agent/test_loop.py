@@ -506,7 +506,9 @@ async def test_failure_before_the_loop_fails_the_run(runner, conversation, seede
     assert (await get_run(seeded, run_id)).status == "failed"
 
 
-async def test_failure_while_resuming_fails_the_run_and_unblocks(runner, llm, conversation, seeded, monkeypatch):
+async def test_failure_while_resuming_fails_the_run_and_unblocks(
+    runner, llm, conversation, seeded, monkeypatch
+):
     run_id, _ = await request_label_change(runner, llm, conversation)
     original = repo.update_tool_call
     calls = {"n": 0}
