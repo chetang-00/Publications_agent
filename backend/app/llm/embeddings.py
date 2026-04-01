@@ -15,7 +15,7 @@ import httpx
 
 from app.config import Settings
 from app.llm.portkey import portkey_headers
-from app.llm.types import LLMError
+from app.llm.types import LLMError, routing_hint
 
 log = logging.getLogger(__name__)
 
@@ -112,8 +112,10 @@ class PortkeyEmbedder:
                     "Check EMBEDDING_PORTKEY_API_KEY / PORTKEY_API_KEY."
                 )
             if response.status_code >= 400:
+                detail = _detail(response)
                 raise EmbeddingError(
-                    f"Embedding request failed (HTTP {response.status_code}): {_detail(response)}"
+                    f"Embedding request failed (HTTP {response.status_code}): {detail}."
+                    f"{routing_hint(detail, 'EMBEDDING_MODEL')}"
                 )
             data = response.json().get("data")
             if not isinstance(data, list):

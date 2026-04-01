@@ -21,6 +21,7 @@ from app.llm.types import (
     LLMToolCall,
     LLMUnavailableError,
     TextDelta,
+    routing_hint,
 )
 
 log = logging.getLogger(__name__)
@@ -119,7 +120,10 @@ class OpenAIChatLLM:
                 "(and PORTKEY_VIRTUAL_KEY if your gateway uses virtual keys)."
             ) from exc
         except (openai.BadRequestError, openai.NotFoundError, openai.UnprocessableEntityError) as exc:
-            raise LLMBadRequestError(f"The model request was rejected: {_error_text(exc)}") from exc
+            detail = _error_text(exc)
+            raise LLMBadRequestError(
+                f"The model request was rejected: {detail}.{routing_hint(detail, 'CHAT_MODEL')}"
+            ) from exc
         except openai.APIError as exc:
             log.warning("LLM request failed", extra={"error": _error_text(exc)})
             raise LLMUnavailableError(

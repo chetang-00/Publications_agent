@@ -40,7 +40,7 @@ The app talks to Portkey exactly like the Open WebUI Portkey connection does:
 | `PORTKEY_API_KEY` | Sent as `x-portkey-api-key`. No `Authorization: Bearer` header is sent. |
 | `PORTKEY_VIRTUAL_KEY` | Optional `x-portkey-virtual-key`. Leave blank when models are named `@provider/model`. |
 | `EMBEDDING_PORTKEY_API_KEY` / `EMBEDDING_PORTKEY_VIRTUAL_KEY` | Optional separate credentials for embeddings. |
-| `CHAT_MODEL` / `EMBEDDING_MODEL` | e.g. `gpt-4o-mini` / `text-embedding-3-small` (or `@provider/model` slugs). |
+| `CHAT_MODEL` / `EMBEDDING_MODEL` | Routed names of the form `@provider/model`, default `@gpt-4o-mini/gpt-4o-mini` / `@openai-embedding/text-embedding-3-small`. `GET <PORTKEY_BASE_URL>/models` lists what your key can use. |
 
 Every agent run is tagged with `x-portkey-trace-id: <run id>`, so it can be found in the Portkey dashboard.
 Check the gateway with `make test-live`: streaming, tool calls and embeddings, using your key.
@@ -165,6 +165,7 @@ Vite 8, Vitest 5 and jsdom need **Node ≥ 22.22**. The `make` targets run the f
 |---|---|
 | API exits with `Configuration error: PORTKEY_API_KEY` | Set the key in `.env`, then `make up`. |
 | Answers fail with "rejected the credentials" | Wrong key, or the gateway expects `PORTKEY_VIRTUAL_KEY`. |
+| `x-portkey-provider header is required` | Use a routed model name (`@provider/model`) for `CHAT_MODEL` / `EMBEDDING_MODEL`. |
 | `llm_bad_request` mentioning `stream_options` | Set `LLM_STREAM_USAGE=false`. |
 | `llm_bad_request` mentioning `temperature` (reasoning models) | Leave `LLM_TEMPERATURE=` blank. |
 | The model never calls tools | Use a model that supports function calling (`make test-live` checks this). |

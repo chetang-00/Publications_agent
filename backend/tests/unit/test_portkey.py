@@ -305,3 +305,14 @@ async def test_temperature_is_omitted_when_unset(settings):
     rec = Recorder(body=sse_body([chunk({"content": "ok"}, "stop")]))
     await collect(make_llm(settings, rec))
     assert "temperature" not in rec.last_json
+
+
+async def test_unrouted_model_error_explains_the_fix(settings):
+    rec = Recorder(
+        status=400,
+        json_body={"error": {"message": "Either x-portkey-config or x-portkey-provider header is required"}},
+    )
+    with pytest.raises(LLMBadRequestError) as exc:
+        await collect(make_llm(settings, rec))
+    assert "@provider/model" in exc.value.message
+    assert "CHAT_MODEL" in exc.value.message

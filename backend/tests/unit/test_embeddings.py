@@ -139,3 +139,17 @@ def test_from_settings_uses_embedding_credentials(settings):
     assert embedder.model == settings.embedding_model
     assert embedder.batch_size == settings.embedding_batch_size
     assert embedder.headers["x-portkey-api-key"] == "test-portkey-key"
+
+
+@respx.mock
+async def test_unrouted_embedding_model_error_explains_the_fix():
+    respx.post(URL).mock(
+        return_value=httpx.Response(
+            400,
+            json={"error": {"message": "Either x-portkey-config or x-portkey-provider header is required"}},
+        )
+    )
+    with pytest.raises(EmbeddingError) as exc:
+        await make().embed(["a"])
+    assert "EMBEDDING_MODEL" in str(exc.value)
+    assert "@provider/model" in str(exc.value)

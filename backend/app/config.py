@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     embedding_portkey_api_key: SecretStr | None = None
     embedding_portkey_virtual_key: SecretStr | None = None
 
-    chat_model: str = "gpt-4o-mini"
-    embedding_model: str = "text-embedding-3-small"
+    # The NYU gateway routes by "@provider/model" names (GET <base>/models lists them).
+    chat_model: str = "@gpt-4o-mini/gpt-4o-mini"
+    embedding_model: str = "@openai-embedding/text-embedding-3-small"
     embedding_batch_size: int = Field(256, ge=1, le=2048)
     llm_stream_usage: bool = True
     # Blank = don't send a temperature (reasoning models reject the parameter).

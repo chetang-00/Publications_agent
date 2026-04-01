@@ -46,6 +46,16 @@ class LLMBadRequestError(LLMError):
     code = "llm_bad_request"
 
 
+def routing_hint(detail: str, setting: str) -> str:
+    """Portkey rejects bare model names when the key has no default route; say how to fix it."""
+    if "x-portkey-provider" in detail or "x-portkey-config" in detail:
+        return (
+            f" Set {setting} to a routed model name of the form @provider/model "
+            "(GET <PORTKEY_BASE_URL>/models lists them), or set PORTKEY_VIRTUAL_KEY."
+        )
+    return ""
+
+
 class ChatLLM(Protocol):
     model: str
 
