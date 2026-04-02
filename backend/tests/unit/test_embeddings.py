@@ -153,3 +153,67 @@ async def test_unrouted_embedding_model_error_explains_the_fix():
         await make().embed(["a"])
     assert "EMBEDDING_MODEL" in str(exc.value)
     assert "@provider/model" in str(exc.value)
+
+
+class FakeClock:
+    """Monotonic clock that only moves when the code under test sleeps."""
+
+    def __init__(self):
+        self.now = 1000.0
+        self.sleeps: list[float] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+@respx.mock
+async def test_batches_are_capped_by_estimated_tokens():
+    route = respx.post(URL).mock(side_effect=ok_response)
+    embedder = PortkeyEmbedder(
+        base_url="https://gw.example/v1",
+        api_key="k",
+        virtual_key=None,
+        model="m",
+        batch_size=100,
+        max_batch_tokens=250,
+        sleep=SleepRecorder(),
+    )
+    await embedder.embed(["x" * 400] * 10)  # ~100 tokens each
+    assert route.call_count == 5
+    assert all(len(json.loads(c.request.content)["input"]) == 2 for c in route.calls)
+
+
+@respx.mock
+async def test_429_without_retry_after_waits_for_the_rate_window():
+    sleep = SleepRecorder()
+    respx.post(URL).mock(side_effect=[httpx.Response(429), httpx.Response(429), ok_response])
+    await make(sleep=sleep).embed(["a"])
+    assert sleep.calls == [5.0, 10.0]
+
+
+@respx.mock
+async def test_requests_are_paced_to_the_reported_token_limit():
+    def limited(request: httpx.Request) -> httpx.Response:
+        response = ok_response(request)
+        response.headers["x-ratelimit-limit-tokens"] = "1000"
+        return response
+
+    route = respx.post(URL).mock(side_effect=limited)
+    clock = FakeClock()
+    embedder = PortkeyEmbedder(
+        base_url="https://gw.example/v1",
+        api_key="k",
+        virtual_key=None,
+        model="m",
+        batch_size=1,
+        sleep=clock.sleep,
+        clock=clock,
+    )
+    await embedder.embed(["y" * 1600] * 3)  # ~400 tokens per request; 3 x 400 > 90% of 1000
+    assert route.call_count == 3
+    assert len(clock.sleeps) == 1
+    assert 59 <= clock.sleeps[0] <= 61  # waited for the first request to leave the one-minute window

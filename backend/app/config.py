@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     chat_model: str = "@gpt-4o-mini/gpt-4o-mini"
     embedding_model: str = "@openai-embedding/text-embedding-3-small"
     embedding_batch_size: int = Field(256, ge=1, le=2048)
+    # Estimated tokens per embeddings request; keep well under the gateway's tokens-per-minute limit.
+    embedding_max_batch_tokens: int = Field(30_000, ge=100, le=1_000_000)
     llm_stream_usage: bool = True
     # Blank = don't send a temperature (reasoning models reject the parameter).
     llm_temperature: float | None = Field(0.2, ge=0, le=2)
