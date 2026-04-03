@@ -91,7 +91,8 @@ def ground_truth(csv_path: Path) -> dict:
     years = Counter(r.year for r in rows if r.year)
     top_year, top_year_count = max(years.items(), key=lambda kv: (kv[1], kv[0]))
     journals = Counter(r.source_title for r in rows if r.source_title)
-    authors = Counter(a for r in rows for a in r.authors)
+    # Same identity as the app: "Desplan C." and "DESPLAN C." are one author.
+    authors = Counter(name for r in rows for name in {normalize(a) for a in r.authors})
     top_author, top_author_count = authors.most_common(1)[0]
     most_cited = max(rows, key=lambda r: r.cited_by or -1)
     return {

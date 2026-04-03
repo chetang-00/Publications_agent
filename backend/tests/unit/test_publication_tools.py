@@ -117,6 +117,7 @@ async def test_like_wildcards_are_literal(run_tool):
 async def test_summary_fields(run_tool):
     item = (await run_tool("filter_publications", title_contains="yeast")).result["items"][0]
     assert item == {
+        "cite": "[pub:6]",
         "id": 6,
         "title": "DNA double strand break repair in yeast",
         "year": 2016,
@@ -146,8 +147,9 @@ def test_limit_is_capped():
 
 
 async def test_stats_by_year_are_chronological(run_tool):
-    out = await run_tool("publication_stats", group_by="year", year_from=2020)
+    out = await run_tool("publication_stats", group_by="year", year_from=2020, sort="key")
     assert out.result["total_publications"] == 12
+    assert out.result["ordered_by"] == "year ascending"
     assert [(b["key"], b["count"]) for b in out.result["buckets"]] == [
         (2020, 2),
         (2021, 4),
@@ -159,7 +161,7 @@ async def test_stats_by_year_are_chronological(run_tool):
 
 
 async def test_stats_by_year_keeps_most_recent_years_when_capped(run_tool):
-    out = await run_tool("publication_stats", group_by="year", top_n=2)
+    out = await run_tool("publication_stats", group_by="year", top_n=2, sort="key")
     assert [b["key"] for b in out.result["buckets"]] == [2023, 2024]
     assert out.result["more_groups"] is True
 
@@ -354,3 +356,18 @@ async def test_setting_unknown_label_clears_the_label(run_tool, tool_ctx):
         "update_cluster_label", publication_id=6, new_label="unknown label", reason="same again"
     )
     assert again.result["status"] == "unchanged"
+
+
+async def test_stats_are_largest_first_by_default(run_tool):
+    out = await run_tool("publication_stats", group_by="year", year_from=2020)
+    assert out.result["buckets"][0] == {"key": 2021, "count": 4}
+    assert out.result["ordered_by"] == "count, largest first"
+
+
+async def test_results_carry_a_ready_made_citation(run_tool):
+    item = (await run_tool("filter_publications", title_contains="yeast")).result["items"][0]
+    assert item["cite"] == "[pub:6]"
+    hit = (await run_tool("search_publications", query="protein folding")).result["items"][0]
+    assert hit["cite"] == f"[pub:{hit['id']}]"
+    detail = (await run_tool("get_publication", publication_id=6)).result
+    assert detail["cite"] == "[pub:6]"

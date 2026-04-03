@@ -108,3 +108,32 @@ def test_prompt_asks_for_one_id_per_bracket():
     from app.agent.prompts import build_system_prompt
 
     assert "[pub:12][pub:31]" in build_system_prompt([], date(2026, 10, 3))
+
+
+def test_uncited_retrieved_titles_get_their_citation():
+    t = tracker_with_results()
+    t.record_tool_result("get_publication", {"id": 20, "title": "Replication stress and genome instability"})
+    content, citations, _ = t.finalize(
+        "| Title | Year |\n|---|---|\n| Replication stress and genome instability | 2021 |"
+    )
+    assert "Replication stress and genome instability [pub:20]" in content
+    assert [c.id for c in citations] == ["20"]
+
+
+def test_titles_already_cited_or_too_short_are_left_alone():
+    t = tracker_with_results()
+    t.record_tool_result("get_publication", {"id": 21, "title": "Short"})
+    t.record_tool_result("get_publication", {"id": 22, "title": "A sufficiently long publication title"})
+    content, citations, _ = t.finalize("Short. A sufficiently long publication title [pub:22].")
+    assert content == "Short. A sufficiently long publication title [pub:22]."
+    assert [c.id for c in citations] == ["22"]
+
+
+def test_prompt_points_the_model_at_the_cite_field():
+    from datetime import date
+
+    from app.agent.prompts import build_system_prompt
+
+    prompt = build_system_prompt([], date(2026, 10, 3))
+    assert "`cite`" in prompt
+    assert "table" in prompt

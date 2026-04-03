@@ -72,6 +72,7 @@ async def test_search_explicit_documents_with_page_numbers(ctx, docs):
     )
     chunk = out.result["chunks"][0]
     assert (chunk["document_id"], chunk["chunk_index"], chunk["page"]) == (docs["trial"], 1, 2)
+    assert chunk["cite"] == f"[doc:{docs['trial']}:1]"
     assert "Survival improved" in chunk["text"]
 
 

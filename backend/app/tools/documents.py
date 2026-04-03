@@ -85,6 +85,7 @@ class SearchDocumentsArgs(ToolArgs):
 
 
 class ChunkHit(BaseModel):
+    cite: str  # ready-made citation marker, e.g. "[doc:<document_id>:<chunk_index>]"
     document_id: str
     filename: str
     chunk_index: int
@@ -131,6 +132,7 @@ async def search_documents(args: SearchDocumentsArgs, ctx: ToolContext) -> Searc
         texts = {(c.document_id, c.chunk_index): c.text for c in rows}
     chunks = [
         ChunkHit(
+            cite=f"[doc:{h.payload['document_id']}:{h.payload['chunk_index']}]",
             document_id=h.payload["document_id"],
             filename=h.payload.get("filename", ""),
             chunk_index=h.payload["chunk_index"],

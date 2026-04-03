@@ -31,6 +31,7 @@ SUMMARY_AUTHORS = 8
 
 
 class PublicationSummary(BaseModel):
+    cite: str  # ready-made citation marker for the answer, e.g. "[pub:6]"
     id: int
     title: str
     year: int | None
@@ -52,6 +53,7 @@ def _short_authors(authors: str | None) -> str | None:
 
 def _summary(pub: Publication) -> PublicationSummary:
     return PublicationSummary(
+        cite=f"[pub:{pub.id}]",
         id=pub.id,
         title=pub.title,
         year=pub.year,
@@ -109,6 +111,11 @@ class PublicationStatsArgs(PublicationFilters):
         description="Dimension to count publications by."
     )
     top_n: int = Field(20, ge=1, le=50, description="Maximum number of groups to return.")
+    sort: Literal["count", "key"] = Field(
+        "count",
+        description="'count': largest groups first (for 'which/most/top' questions). "
+        "'key': by group value, chronological for years (for trends over time).",
+    )
 
 
 class StatsBucket(BaseModel):
@@ -118,6 +125,7 @@ class StatsBucket(BaseModel):
 
 class PublicationStatsResult(BaseModel):
     group_by: str
+    ordered_by: str
     total_publications: int
     buckets: list[StatsBucket]
     more_groups: bool
@@ -151,15 +159,22 @@ async def publication_stats(args: PublicationStatsArgs, ctx: ToolContext) -> Pub
 
     async with ctx.db.sessionmaker() as session:
         total = (await session.execute(apply_filters(select(func.count(Publication.id)), args))).scalar_one()
-        if args.group_by == "year":
+        if args.sort == "key" and args.group_by == "year":
             # Chronological; when there are more years than top_n, keep the most recent ones.
             rows = (await session.execute(stmt.order_by(key.desc().nulls_last()).limit(args.top_n + 1))).all()
             more = len(rows) > args.top_n
             rows = sorted(rows[: args.top_n], key=lambda row: (row[0] is None, row[0] or 0))
+            ordered_by = "year ascending"
+        elif args.sort == "key":
+            rows = (await session.execute(stmt.order_by(key.asc().nulls_last()).limit(args.top_n + 1))).all()
+            more = len(rows) > args.top_n
+            rows = rows[: args.top_n]
+            ordered_by = f"{args.group_by} ascending"
         else:
             rows = (await session.execute(stmt.order_by(n, key).limit(args.top_n + 1))).all()
             more = len(rows) > args.top_n
             rows = rows[: args.top_n]
+            ordered_by = "count, largest first"
 
     def label(value: Any) -> Any:
         if args.group_by == "cluster_label" and value is None:
@@ -168,6 +183,7 @@ async def publication_stats(args: PublicationStatsArgs, ctx: ToolContext) -> Pub
 
     return PublicationStatsResult(
         group_by=args.group_by,
+        ordered_by=ordered_by,
         total_publications=total,
         buckets=[StatsBucket(key=label(k), count=count) for k, count in rows],
         more_groups=more,
@@ -182,6 +198,7 @@ class GetPublicationArgs(ToolArgs):
 
 
 class PublicationDetail(BaseModel):
+    cite: str
     id: int
     eid: str
     title: str
@@ -213,6 +230,7 @@ async def _get_or_error(ctx: ToolContext, publication_id: int) -> Publication:
 async def get_publication(args: GetPublicationArgs, ctx: ToolContext) -> PublicationDetail:
     pub = await _get_or_error(ctx, args.publication_id)
     return PublicationDetail(
+        cite=f"[pub:{pub.id}]",
         id=pub.id,
         eid=pub.eid,
         title=pub.title,
@@ -514,9 +532,9 @@ TOOLS: list[Tool] = [
         name="publication_stats",
         description=(
             "Count publications grouped by year, cluster_label, source_title, author, keyword or document_type, "
-            "with the same filters as filter_publications. Use for trends, 'most frequent topics/keywords', "
-            "'most active authors', 'papers per year'. Year groups are chronological; if there are more years "
-            "than top_n the most recent are returned."
+            "with the same filters as filter_publications. Use for 'which/most/top' questions (default "
+            "sort='count', largest first) and for trends over time (sort='key': chronological years; if there "
+            "are more years than top_n the most recent are returned)."
         ),
         args_model=PublicationStatsArgs,
         result_model=PublicationStatsResult,

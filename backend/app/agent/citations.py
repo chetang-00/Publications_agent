@@ -17,6 +17,9 @@ _PUB = re.compile(r"^(?:pub\s*:\s*)?(?P<id>\d+)$", re.IGNORECASE)
 _DOC = re.compile(r"^doc\s*:\s*(?P<doc>[0-9a-fA-F-]{36})\s*:\s*(?P<chunk>\d+)$", re.IGNORECASE)
 
 
+MIN_TITLE_FOR_AUTOCITE = 20  # shorter titles are too likely to match ordinary prose
+
+
 class CitationTracker:
     def __init__(self) -> None:
         self.publications: dict[int, str | None] = {}
@@ -65,6 +68,24 @@ class CitationTracker:
             elif c.get("kind") == "document" and isinstance(c.get("chunk_index"), int):
                 self.chunks[(str(c.get("id")).lower(), c["chunk_index"])] = (c.get("filename"), c.get("page"))
 
+    def _cite_quoted_titles(self, content: str, citations: dict[str, Citation]) -> str:
+        """Safety net: a retrieved paper named by its exact title but left uncited gets its marker."""
+        lowered = content.lower()
+        for pub_id, title in self.publications.items():
+            marker = f"pub:{pub_id}"
+            if not title or len(title) < MIN_TITLE_FOR_AUTOCITE or f"[{marker}]" in content:
+                continue
+            start = lowered.find(title.lower())
+            if start < 0:
+                continue
+            end = start + len(title)
+            content = f"{content[:end]} [{marker}]{content[end:]}"
+            lowered = content.lower()
+            citations.setdefault(
+                marker, Citation(kind="publication", id=str(pub_id), marker=marker, title=title)
+            )
+        return content
+
     def finalize(self, content: str) -> tuple[str, list[Citation], list[str]]:
         """Returns (content with only verified markers, citations in first-use order, unverified markers)."""
         citations: dict[str, Citation] = {}
@@ -107,6 +128,7 @@ class CitationTracker:
             return "".join(out)
 
         cleaned = _GROUP.sub(replace, content)
+        cleaned = self._cite_quoted_titles(cleaned, citations)
         if unverified:
             cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)  # "paper ." -> "paper."
             cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
