@@ -4,6 +4,7 @@ and the one write action (cluster label change, approval required)."""
 import difflib
 import logging
 import re
+from collections import Counter
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -265,6 +266,7 @@ class ResolveAuthorArgs(ToolArgs):
 class AuthorMatch(BaseModel):
     author: str
     full_name: str | None
+    other_full_names: list[str] = []
     paper_count: int
     score: float
 
@@ -274,9 +276,29 @@ class ResolveAuthorResult(BaseModel):
     matches: list[AuthorMatch]
 
 
-def _name_forms(author_norm: str, full_name: str | None) -> list[str]:
+NAME_STOPWORDS = frozenset(
+    {"or", "and", "the", "by", "of", "et", "al", "dr", "prof", "mr", "ms", "mrs", "named"}
+)
+MIN_AUTHOR_SCORE = 0.6
+
+
+_NAME_WORD = re.compile(r"[^\W\d_][^\W\d_'\-]*")  # unicode letters: "Bühler", "Núñez", "O'Brien"
+
+
+def name_words(name: str) -> list[str]:
+    """Every part of a name, initials included, minus stopwords and SQL/punctuation debris."""
+    words = (w.strip("'-") for w in _NAME_WORD.findall(name.lower()))
+    return [w for w in words if w and w not in NAME_STOPWORDS]
+
+
+def name_tokens(name: str) -> list[str]:
+    """The parts of a name long enough to search on (initials only help ranking)."""
+    return [w for w in name_words(name) if len(w) >= 2]
+
+
+def _name_forms(author_norm: str, full_names: list[str]) -> list[str]:
     forms = [author_norm]
-    if full_name:
+    for full_name in full_names:
         last, _, first = full_name.lower().partition(",")
         last, first = last.strip(), first.strip()
         forms += [f"{first} {last}".strip(), f"{last} {first}".strip()]
@@ -284,42 +306,69 @@ def _name_forms(author_norm: str, full_name: str | None) -> list[str]:
 
 
 async def resolve_author(args: ResolveAuthorArgs, ctx: ToolContext) -> ResolveAuthorResult:
-    words = re.findall(r"[a-z][a-z'\-]*", args.name.lower())
-    query = " ".join(words)
-    tokens = [w for w in words if len(w) >= 2]
+    tokens = name_tokens(args.name)
     if not tokens:
         return ResolveAuthorResult(query=args.name, matches=[])
+    # Initials take part in similarity ("S.S. Brody" should prefer "Brody S.S." over "Brody M.").
+    query = " ".join(name_words(args.name))
 
     prefilter = []
     for token in tokens:
         prefilter.append(PublicationAuthor.author_norm.startswith(token, autoescape=True))
         prefilter.append(func.lower(PublicationAuthor.full_name).contains(token, autoescape=True))
     async with ctx.db.sessionmaker() as session:
-        rows = (
+        variants = (
             await session.execute(
                 select(
-                    func.min(PublicationAuthor.author),
                     PublicationAuthor.author_norm,
+                    PublicationAuthor.author,
                     PublicationAuthor.full_name,
-                    func.count(distinct(PublicationAuthor.publication_id)),
+                    func.count(PublicationAuthor.publication_id),
                 )
                 .where(or_(*prefilter))
-                .group_by(PublicationAuthor.author_norm, PublicationAuthor.full_name)
-                .limit(500)
+                .group_by(
+                    PublicationAuthor.author_norm, PublicationAuthor.author, PublicationAuthor.full_name
+                )
+                .limit(2000)
             )
         ).all()
+        norms = list({v[0] for v in variants})[:500]
+        totals = dict(
+            (
+                await session.execute(
+                    select(
+                        PublicationAuthor.author_norm, func.count(distinct(PublicationAuthor.publication_id))
+                    )
+                    .where(PublicationAuthor.author_norm.in_(norms))
+                    .group_by(PublicationAuthor.author_norm)
+                )
+            ).all()
+        )
+
+    # One candidate per stored author; its spellings of the full name are variants, not people.
+    spellings: dict[str, Counter] = {}
+    full_names: dict[str, Counter] = {}
+    for author_norm, author, full_name, count in variants:
+        spellings.setdefault(author_norm, Counter())[author] += count
+        if full_name:
+            full_names.setdefault(author_norm, Counter())[full_name] += count
 
     ranked: list[tuple[float, AuthorMatch]] = []
-    for author, author_norm, full_name, papers in rows:
+    for author_norm, authors in spellings.items():
+        names = [n for n, _ in full_names.get(author_norm, Counter()).most_common()]
         similarity = max(
-            difflib.SequenceMatcher(None, query, form).ratio() for form in _name_forms(author_norm, full_name)
+            difflib.SequenceMatcher(None, query, form).ratio() for form in _name_forms(author_norm, names)
         )
         # A surname hit is strong evidence; the bonus is applied before capping so that two
         # same-surname candidates are still ordered by how well the rest of the name matches.
         raw = similarity + (0.2 if author_norm.split(" ")[0] in tokens else 0.0)
-        if raw >= 0.5:
+        if raw >= MIN_AUTHOR_SCORE:
             match = AuthorMatch(
-                author=author, full_name=full_name, paper_count=papers, score=round(min(raw, 1.0), 2)
+                author=authors.most_common(1)[0][0],
+                full_name=names[0] if names else None,
+                other_full_names=names[1:4],
+                paper_count=totals.get(author_norm, 0),
+                score=round(min(raw, 1.0), 2),
             )
             ranked.append((raw, match))
     ranked.sort(key=lambda item: (-item[0], -item[1].paper_count, item[1].author))
@@ -522,7 +571,8 @@ TOOLS: list[Tool] = [
         description=(
             "Exact, structured listing of publications with filters (title text, keyword, author, year range, "
             "cluster label, journal, document type), sorting and paging. Returns the total match count plus "
-            "a page of papers. Use for 'list/show papers by X in 2021' and exact counts."
+            "a page of papers. Use for 'list/show papers by X in 2021', exact counts, and rankings such as the "
+            "most cited papers (sort_by='cited_by', order='desc') or the newest papers (sort_by='year')."
         ),
         args_model=FilterPublicationsArgs,
         result_model=FilterPublicationsResult,

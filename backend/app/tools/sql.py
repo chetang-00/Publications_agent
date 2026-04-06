@@ -123,8 +123,9 @@ TOOLS: list[Tool] = [
         description=(
             "Run ONE read-only SQLite SELECT over the publication tables, for questions the other tools cannot "
             "express (unusual aggregations, co-authorship, cross-field conditions). Prefer the typed tools when "
-            "they fit. Use LOWER(...) LIKE for case-insensitive text matching. Include publications.id in the "
-            "output when you will cite papers.\n" + SCHEMA_HELP
+            "they fit. Use LOWER(...) LIKE for case-insensitive text matching. Whenever rows are publications, "
+            "select their id and title (e.g. SELECT p.id, p.title, ... FROM publications p) so they can be cited.\n"
+            + SCHEMA_HELP
         ),
         args_model=RunReadonlySqlArgs,
         result_model=RunReadonlySqlResult,

@@ -4,7 +4,7 @@ NODE     := scripts/node-docker.sh
 SEED_CSV ?= data/seed/papers_with_cluster_labels.csv
 
 .DEFAULT_GOAL := help
-.PHONY: help up down restart logs ps seed reindex test test-backend test-frontend test-live lint smoke dev-qdrant dev-api dev-web clean
+.PHONY: help up down restart logs ps seed reindex test test-backend test-frontend test-live lint smoke e2e dev-qdrant dev-api dev-web clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -53,6 +53,9 @@ lint: ## Ruff + TypeScript checks
 
 smoke: ## End-to-end checks against the running stack and the real gateway (needs PORTKEY_API_KEY)
 	cd backend && uv run python ../scripts/smoke.py
+
+e2e: ## Edge-case end-to-end suite against the running stack (own sample data; restarts the API twice)
+	cd backend && uv run python ../scripts/e2e.py
 
 dev-qdrant: ## Development: run only Qdrant on localhost:6333
 	docker run --rm -p 127.0.0.1:6333:6333 -v pa-dev-qdrant:/qdrant/storage qdrant/qdrant:v1.19.1

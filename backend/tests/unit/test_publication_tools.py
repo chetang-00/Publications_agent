@@ -371,3 +371,43 @@ async def test_results_carry_a_ready_made_citation(run_tool):
     assert hit["cite"] == f"[pub:{hit['id']}]"
     detail = (await run_tool("get_publication", publication_id=6)).result
     assert detail["cite"] == "[pub:6]"
+
+
+def test_descriptions_steer_ranking_questions_to_typed_tools():
+    registry = build_registry()
+    assert "most cited" in registry.get("filter_publications").description
+    assert "SELECT p.id" in registry.get("run_readonly_sql").description
+
+
+async def test_resolve_author_counts_every_spelling_of_one_author(run_tool):
+    # Paper 17 spells the full name "Ranganath, R."; the stored author is still "Ranganath R.".
+    match = (await run_tool("resolve_author", name="Rajesh Ranganath")).result["matches"][0]
+    assert (match["author"], match["paper_count"]) == ("Ranganath R.", 6)
+    assert match["full_name"] == "Ranganath, Rajesh"
+    assert match["other_full_names"] == ["Ranganath, R."]
+
+
+def test_name_tokens_ignore_stopwords_and_fragments():
+    from app.tools.publications import name_tokens
+
+    assert name_tokens("Rajesh Ranganath") == ["rajesh", "ranganath"]
+    assert name_tokens("x' OR 1=1 --") == []
+    assert name_tokens("Dr. Kim Lee") == ["kim", "lee"]
+    assert name_tokens("Li X") == ["li"]
+
+
+async def test_resolve_author_with_no_usable_name_matches_nothing(run_tool):
+    assert (await run_tool("resolve_author", name="x' OR 1=1 --")).result["matches"] == []
+
+
+def test_name_tokens_keep_accented_letters():
+    from app.tools.publications import name_tokens
+
+    assert name_tokens("Oliver Bühler") == ["oliver", "bühler"]
+    assert name_tokens("José Ángel Núñez") == ["josé", "ángel", "núñez"]
+
+
+async def test_initials_pick_the_right_person_among_same_surnames(run_tool):
+    # Fixture has "Smith J." (John) and "Smith J.A." (Jane A.); initials must decide.
+    assert (await run_tool("resolve_author", name="J.A. Smith")).result["matches"][0]["author"] == "Smith J.A."
+    assert (await run_tool("resolve_author", name="J. Smith")).result["matches"][0]["author"] == "Smith J."
