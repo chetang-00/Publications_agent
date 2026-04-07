@@ -137,3 +137,56 @@ def test_prompt_points_the_model_at_the_cite_field():
     prompt = build_system_prompt([], date(2026, 10, 3))
     assert "`cite`" in prompt
     assert "table" in prompt
+
+
+HANDBOOK = "Lab handbook. Freezer policy: samples are stored at -80 C. The freezer alarm code is 7731."
+
+
+def tracker_with_passages() -> CitationTracker:
+    t = CitationTracker()
+    t.record_tool_result(
+        "search_documents",
+        {
+            "chunks": [
+                {
+                    "document_id": DOC,
+                    "chunk_index": 0,
+                    "page": None,
+                    "filename": "handbook.md",
+                    "text": HANDBOOK,
+                },
+                {
+                    "document_id": DOC,
+                    "chunk_index": 1,
+                    "page": None,
+                    "filename": "handbook.md",
+                    "text": "Visitor parking is available behind building seven on weekdays.",
+                },
+            ]
+        },
+    )
+    return t
+
+
+def test_answer_drawn_from_a_passage_gets_its_citation():
+    content, citations, _ = tracker_with_passages().finalize(
+        "The handbook describes the freezer policy: samples are stored at -80 C and the alarm code is 7731."
+    )
+    assert content.endswith(f"[doc:{DOC}:0]")
+    assert [c.marker for c in citations] == [f"doc:{DOC}:0"]
+
+
+def test_unrelated_passages_are_not_attached():
+    content, citations, _ = tracker_with_passages().finalize(
+        "CRISPR is a genome editing technique used widely."
+    )
+    assert citations == []
+    assert "[doc:" not in content
+
+
+def test_answers_that_already_cite_documents_are_left_alone():
+    content, citations, _ = tracker_with_passages().finalize(
+        f"Samples are stored at -80 C and the freezer alarm code is 7731 [doc:{DOC}:0]."
+    )
+    assert content.count("[doc:") == 1
+    assert len(citations) == 1

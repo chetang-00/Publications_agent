@@ -520,15 +520,14 @@ def publication_qa(api: Api, truth: dict) -> None:
     )
 
     cid = api.new_conversation("follow-up")
-    first = api.ask("List three papers by Desplan C.", conversation=cid)
-    second = api.ask("Which of those three is the most cited?", conversation=cid)
+    first = api.ask("List the three most cited papers by Desplan C., most cited first.", conversation=cid)
+    order = [c["id"] for c in first.citations if c["kind"] == "publication"]
+    second = api.ask("Give me the full title of the second paper in that list.", conversation=cid)
     check(
         "publications",
         "follow-up uses conversation history",
-        bool(second.cited_pubs)
-        and bool(first.cited_pubs)
-        and second.cited_pubs <= first.cited_pubs | second.cited_pubs,
-        f"first={sorted(first.cited_pubs)} second={sorted(second.cited_pubs)} answer={short(second.answer)}",
+        len(order) >= 2 and order[1] in second.cited_pubs,
+        f"first={order} second={sorted(second.cited_pubs)} answer={short(second.answer)}",
     )
 
     run = api.ask("¿Cuántos artículos se publicaron en 2021?")

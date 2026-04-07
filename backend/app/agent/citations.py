@@ -18,12 +18,21 @@ _DOC = re.compile(r"^doc\s*:\s*(?P<doc>[0-9a-fA-F-]{36})\s*:\s*(?P<chunk>\d+)$",
 
 
 MIN_TITLE_FOR_AUTOCITE = 20  # shorter titles are too likely to match ordinary prose
+MIN_SHARED_WORDS = 4  # a passage must share this many distinctive words with the answer…
+MIN_ANSWER_COVERAGE = 0.3  # …and supply this share of the answer's distinctive words
+MAX_AUTOCITED_PASSAGES = 3
+_WORD = re.compile(r"[^\W_]{4,}|\d{2,}")
+
+
+def _distinctive_words(text: str) -> set[str]:
+    return set(_WORD.findall(text.lower()))
 
 
 class CitationTracker:
     def __init__(self) -> None:
         self.publications: dict[int, str | None] = {}
         self.chunks: dict[tuple[str, int], tuple[str | None, int | None]] = {}
+        self.passages: dict[tuple[str, int], str] = {}  # text of passages retrieved in this run
 
     def _pub(self, pub_id: Any, title: Any = None) -> None:
         if isinstance(pub_id, int) or (isinstance(pub_id, str) and pub_id.isdigit()):
@@ -51,6 +60,8 @@ class CitationTracker:
                 ):
                     key = (str(chunk["document_id"]).lower(), chunk["chunk_index"])
                     self.chunks[key] = (chunk.get("filename"), chunk.get("page"))
+                    if isinstance(chunk.get("text"), str):
+                        self.passages[key] = chunk["text"]
         if tool_name == "run_readonly_sql":
             columns = result.get("columns") or []
             id_column = next((c for c in ("id", "publication_id") if c in columns), None)
@@ -85,6 +96,31 @@ class CitationTracker:
                 marker, Citation(kind="publication", id=str(pub_id), marker=marker, title=title)
             )
         return content
+
+    def _cite_supporting_passages(self, content: str, citations: dict[str, Citation]) -> str:
+        """Safety net: an answer built from retrieved passages but citing none gets them as sources."""
+        if "[doc:" in content or not self.passages:
+            return content
+        answer_words = _distinctive_words(content)
+        if not answer_words:
+            return content
+        scored = []
+        for key, text in self.passages.items():
+            shared = len(answer_words & _distinctive_words(text))
+            if shared >= MIN_SHARED_WORDS and shared / len(answer_words) >= MIN_ANSWER_COVERAGE:
+                scored.append((shared, key))
+        markers = []
+        for _, (doc_id, chunk) in sorted(scored, reverse=True)[:MAX_AUTOCITED_PASSAGES]:
+            marker = f"doc:{doc_id}:{chunk}"
+            filename, page = self.chunks[(doc_id, chunk)]
+            citations.setdefault(
+                marker,
+                Citation(
+                    kind="document", id=doc_id, marker=marker, filename=filename, page=page, chunk_index=chunk
+                ),
+            )
+            markers.append(f"[{marker}]")
+        return f"{content.rstrip()} {''.join(markers)}" if markers else content
 
     def finalize(self, content: str) -> tuple[str, list[Citation], list[str]]:
         """Returns (content with only verified markers, citations in first-use order, unverified markers)."""
@@ -129,6 +165,7 @@ class CitationTracker:
 
         cleaned = _GROUP.sub(replace, content)
         cleaned = self._cite_quoted_titles(cleaned, citations)
+        cleaned = self._cite_supporting_passages(cleaned, citations)
         if unverified:
             cleaned = re.sub(r"[ \t]+([.,;:!?])", r"\1", cleaned)  # "paper ." -> "paper."
             cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)

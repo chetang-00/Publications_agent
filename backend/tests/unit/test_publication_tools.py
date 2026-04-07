@@ -409,5 +409,7 @@ def test_name_tokens_keep_accented_letters():
 
 async def test_initials_pick_the_right_person_among_same_surnames(run_tool):
     # Fixture has "Smith J." (John) and "Smith J.A." (Jane A.); initials must decide.
-    assert (await run_tool("resolve_author", name="J.A. Smith")).result["matches"][0]["author"] == "Smith J.A."
+    assert (await run_tool("resolve_author", name="J.A. Smith")).result["matches"][0][
+        "author"
+    ] == "Smith J.A."
     assert (await run_tool("resolve_author", name="J. Smith")).result["matches"][0]["author"] == "Smith J."
