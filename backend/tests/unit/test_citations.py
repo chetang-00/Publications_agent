@@ -190,3 +190,11 @@ def test_answers_that_already_cite_documents_are_left_alone():
     )
     assert content.count("[doc:") == 1
     assert len(citations) == 1
+
+
+def test_prompt_says_where_the_marker_goes():
+    from datetime import date
+
+    from app.agent.prompts import build_system_prompt
+
+    assert "never as a separate" in build_system_prompt([], date(2026, 10, 3))
